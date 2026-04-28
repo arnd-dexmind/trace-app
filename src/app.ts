@@ -189,7 +189,8 @@ export function createApp() {
     next(new ApiError(404, "NOT_FOUND", `No route for ${req.method} ${req.path}`));
   });
 
-  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  app.use((err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    void next;
     if (err instanceof ApiError) {
       sendApiError(res, err.status, err.code, err.message);
       return;
