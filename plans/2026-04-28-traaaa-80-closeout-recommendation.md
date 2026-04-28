@@ -41,7 +41,7 @@ Patched CI and migration script flow:
 
 ## Recommendation for MVP closeout posture
 
-1. Merge PR #1 after CI rerun reflects the workflow fix.
+1. Merge PR #1 after review; CI is green on commit `c864a81` (GitHub Actions run `25079969300` passed).
 2. TRAAAA-12 can close after PR #1 merge, with residual risks tracked as bounded follow-ons.
 3. TRAAAA-80 can be marked `done` once this recommendation is posted on-issue.
 
