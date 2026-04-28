@@ -10,6 +10,8 @@ on:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: file:./prisma/ci.db
 
     steps:
       - name: Checkout
@@ -25,7 +27,7 @@ jobs:
         run: npm ci
 
       - name: Apply migrations
-        run: npm run db:migrate
+        run: npm run db:migrate:deploy
 
       - name: Lint
         run: npm run lint

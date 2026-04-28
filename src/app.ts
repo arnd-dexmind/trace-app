@@ -2,6 +2,49 @@ import express from "express";
 import { db } from "./lib/db.js";
 import { createTraceRecord, listTraceRecords } from "./traces.js";
 
+type ApiErrorCode = "BAD_REQUEST" | "NOT_FOUND" | "INTERNAL_ERROR";
+
+class ApiError extends Error {
+  status: number;
+  code: ApiErrorCode;
+
+  constructor(status: number, code: ApiErrorCode, message: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+function createRequestId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function sendApiError(
+  res: express.Response,
+  status: number,
+  code: ApiErrorCode,
+  message: string,
+) {
+  res.status(status).json({
+    error: {
+      code,
+      message,
+      requestId: String(res.locals.requestId || ""),
+    },
+  });
+}
+
+function parseTenantId(raw: string | undefined) {
+  const value = (raw || "").trim();
+  if (!value) {
+    return null;
+  }
+  if (!/^[a-zA-Z0-9_-]{2,64}$/.test(value)) {
+    return null;
+  }
+  return value;
+}
+
 function renderPage() {
   return `<!doctype html>
 <html>
@@ -54,7 +97,7 @@ function renderPage() {
 
         const res = await fetch('/api/traces', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', 'x-tenant-id': 'demo' },
           body: JSON.stringify(payload),
         });
 
@@ -80,6 +123,28 @@ function renderPage() {
 export function createApp() {
   const app = express();
 
+  app.use((req, res, next) => {
+    const requestId = req.header("x-request-id") || createRequestId();
+    const startedAt = process.hrtime.bigint();
+    res.setHeader("x-request-id", requestId);
+    res.locals.requestId = requestId;
+
+    res.on("finish", () => {
+      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+      const log = {
+        level: "info",
+        requestId,
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        durationMs: Number(durationMs.toFixed(2)),
+      };
+      console.log(JSON.stringify(log));
+    });
+
+    next();
+  });
+
   app.use(express.json());
 
   app.get("/", (_req, res) => {
@@ -90,22 +155,55 @@ export function createApp() {
     res.status(200).json({ status: "ok" });
   });
 
-  app.get("/api/traces", async (_req, res) => {
-    const traces = await listTraceRecords(db);
+  app.get("/api/traces", async (req, res) => {
+    const tenantId = parseTenantId(req.header("x-tenant-id"));
+    if (!tenantId) {
+      sendApiError(res, 400, "BAD_REQUEST", "x-tenant-id header is required");
+      return;
+    }
+
+    const traces = await listTraceRecords(db, tenantId);
     res.status(200).json(traces);
   });
 
   app.post("/api/traces", async (req, res) => {
+    const tenantId = parseTenantId(req.header("x-tenant-id"));
+    if (!tenantId) {
+      sendApiError(res, 400, "BAD_REQUEST", "x-tenant-id header is required");
+      return;
+    }
+
     const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
     const body = typeof req.body?.body === "string" ? req.body.body : undefined;
 
     if (!title) {
-      res.status(400).json({ error: "title is required" });
+      sendApiError(res, 400, "BAD_REQUEST", "title is required");
       return;
     }
 
-    const trace = await createTraceRecord(db, { title, body });
+    const trace = await createTraceRecord(db, { tenantId, title, body });
     res.status(201).json(trace);
+  });
+
+  app.use((req, _res, next) => {
+    next(new ApiError(404, "NOT_FOUND", `No route for ${req.method} ${req.path}`));
+  });
+
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (err instanceof ApiError) {
+      sendApiError(res, err.status, err.code, err.message);
+      return;
+    }
+
+    const requestId = String(res.locals.requestId || "");
+    console.error(
+      JSON.stringify({
+        level: "error",
+        requestId,
+        message: err instanceof Error ? err.message : "Unexpected error",
+      }),
+    );
+    sendApiError(res, 500, "INTERNAL_ERROR", "Internal server error");
   });
 
   return app;

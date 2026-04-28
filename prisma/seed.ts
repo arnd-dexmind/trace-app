@@ -8,6 +8,7 @@ async function main() {
     update: {},
     create: {
       id: "seed-welcome",
+      tenantId: "demo",
       title: "Welcome trace",
       body: "Initial seed record for local development."
     }
