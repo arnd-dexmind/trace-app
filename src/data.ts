@@ -97,6 +97,21 @@ export async function getWalkthrough(
   return ensureWalkthrough(db, walkthroughId, tenantId);
 }
 
+export async function startProcessing(
+  db: PrismaClient,
+  walkthroughId: string,
+  tenantId: string,
+) {
+  const wt = await ensureWalkthrough(db, walkthroughId, tenantId);
+  if (!wt) return null;
+  if (wt.status !== "uploaded") return null;
+
+  return db.walkthrough.update({
+    where: { id: walkthroughId },
+    data: { status: "processing", processedAt: new Date() },
+  });
+}
+
 // ── Observations (Ingestion) ──────────────────────────────────────────────────
 
 export type ObservationItemInput = {
@@ -128,6 +143,9 @@ export async function ingestObservations(
 ) {
   const wt = await db.walkthrough.findUnique({ where: { id: params.walkthroughId } });
   if (!wt || wt.tenantId !== params.tenantId || wt.spaceId !== params.spaceId) {
+    return null;
+  }
+  if (wt.status !== "uploaded" && wt.status !== "processing") {
     return null;
   }
 
@@ -186,7 +204,7 @@ export async function ingestObservations(
   // Transition walkthrough to awaiting_review
   await db.walkthrough.update({
     where: { id: params.walkthroughId },
-    data: { status: "awaiting_review", processedAt: new Date() },
+    data: { status: "awaiting_review" },
   });
 
   return { itemObservations, repairObservations, reviewTask };
