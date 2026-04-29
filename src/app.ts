@@ -1,5 +1,7 @@
 import express from "express";
-import { ApiError, createRequestId, sendApiError } from "./lib/errors.js";
+import { ApiError, createRequestId, sendApiError, requireTenant } from "./lib/errors.js";
+import { db } from "./lib/db.js";
+import { getMediaAsset } from "./data.js";
 import { spacesRouter } from "./routes/spaces.js";
 import { reviewRouter } from "./routes/review.js";
 
@@ -58,6 +60,15 @@ export function createApp() {
 
   app.get("/api/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
+  });
+
+  app.get("/api/media-assets/:id", requireTenant, async (req, res) => {
+    const asset = await getMediaAsset(db, req.params.id, res.locals.tenantId);
+    if (!asset) {
+      sendApiError(res, 404, "NOT_FOUND", "Media asset not found");
+      return;
+    }
+    res.status(200).json(asset);
   });
 
   app.use("/api/spaces", spacesRouter);

@@ -349,6 +349,124 @@ export async function updateRepairStatus(
   return db.repairIssue.update({ where: { id: issueId }, data });
 }
 
+// ── Zones ──────────────────────────────────────────────────────────────────────
+
+export async function createZone(
+  db: PrismaClient,
+  params: { spaceId: string; tenantId: string; name: string; description?: string },
+) {
+  return db.spaceZone.create({
+    data: {
+      spaceId: params.spaceId,
+      tenantId: params.tenantId,
+      name: params.name,
+      description: params.description?.trim() || null,
+    },
+  });
+}
+
+export async function listZones(
+  db: PrismaClient,
+  spaceId: string,
+  tenantId: string,
+) {
+  return db.spaceZone.findMany({
+    where: { spaceId, tenantId },
+    orderBy: { name: "asc" },
+    take: 100,
+  });
+}
+
+// ── Storage Locations ──────────────────────────────────────────────────────────
+
+export async function createStorageLocation(
+  db: PrismaClient,
+  params: {
+    spaceId: string;
+    tenantId: string;
+    name: string;
+    description?: string;
+    parentId?: string;
+    zoneId?: string;
+  },
+) {
+  return db.storageLocation.create({
+    data: {
+      spaceId: params.spaceId,
+      tenantId: params.tenantId,
+      name: params.name,
+      description: params.description?.trim() || null,
+      parentId: params.parentId || null,
+      zoneId: params.zoneId || null,
+    },
+  });
+}
+
+export async function listStorageLocations(
+  db: PrismaClient,
+  spaceId: string,
+  tenantId: string,
+) {
+  return db.storageLocation.findMany({
+    where: { spaceId, tenantId, parentId: null },
+    orderBy: { name: "asc" },
+    take: 100,
+    include: {
+      zone: { select: { id: true, name: true } },
+      children: {
+        orderBy: { name: "asc" },
+        include: {
+          zone: { select: { id: true, name: true } },
+          children: {
+            orderBy: { name: "asc" },
+            include: {
+              zone: { select: { id: true, name: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+// ── Media Assets ───────────────────────────────────────────────────────────────
+
+export async function getMediaAsset(
+  db: PrismaClient,
+  id: string,
+  tenantId: string,
+) {
+  const asset = await db.mediaAsset.findUnique({
+    where: { id },
+    include: {
+      walkthrough: { select: { id: true, spaceId: true, status: true } },
+    },
+  });
+  if (!asset || asset.tenantId !== tenantId) return null;
+  return asset;
+}
+
+export async function createMediaAsset(
+  db: PrismaClient,
+  params: {
+    walkthroughId: string;
+    tenantId: string;
+    type: string;
+    url: string;
+    thumbnailUrl?: string;
+  },
+) {
+  return db.mediaAsset.create({
+    data: {
+      walkthroughId: params.walkthroughId,
+      tenantId: params.tenantId,
+      type: params.type,
+      url: params.url,
+      thumbnailUrl: params.thumbnailUrl || null,
+    },
+  });
+}
+
 // ── Review ────────────────────────────────────────────────────────────────────
 
 export async function listReviewQueue(

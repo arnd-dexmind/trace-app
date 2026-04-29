@@ -7,6 +7,7 @@ import {
   listSpaces,
   createWalkthrough,
   listWalkthroughs,
+  getWalkthrough,
   startProcessing,
   searchItems,
   getItem,
@@ -14,6 +15,11 @@ import {
   createRepair,
   updateRepairStatus,
   ingestObservations,
+  createZone,
+  listZones,
+  createStorageLocation,
+  listStorageLocations,
+  createMediaAsset,
 } from "../data.js";
 
 export const spacesRouter = Router();
@@ -236,4 +242,123 @@ spacesRouter.post("/:id/observations", async (req, res) => {
   }
 
   res.status(201).json(result);
+});
+
+// ── Zones ──────────────────────────────────────────────────────────────────────
+
+spacesRouter.post("/:id/zones", async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (!name) {
+    sendApiError(res, 400, "BAD_REQUEST", "name is required");
+    return;
+  }
+
+  const zone = await createZone(db, {
+    spaceId: req.params.id,
+    tenantId: res.locals.tenantId,
+    name,
+    description:
+      typeof req.body?.description === "string"
+        ? req.body.description
+        : undefined,
+  });
+  res.status(201).json(zone);
+});
+
+spacesRouter.get("/:id/zones", async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const zones = await listZones(db, req.params.id, res.locals.tenantId);
+  res.status(200).json(zones);
+});
+
+// ── Storage Locations ──────────────────────────────────────────────────────────
+
+spacesRouter.post("/:id/storage-locations", async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (!name) {
+    sendApiError(res, 400, "BAD_REQUEST", "name is required");
+    return;
+  }
+
+  const loc = await createStorageLocation(db, {
+    spaceId: req.params.id,
+    tenantId: res.locals.tenantId,
+    name,
+    description:
+      typeof req.body?.description === "string"
+        ? req.body.description
+        : undefined,
+    parentId:
+      typeof req.body?.parentId === "string" ? req.body.parentId : undefined,
+    zoneId:
+      typeof req.body?.zoneId === "string" ? req.body.zoneId : undefined,
+  });
+  res.status(201).json(loc);
+});
+
+spacesRouter.get("/:id/storage-locations", async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const locations = await listStorageLocations(
+    db,
+    req.params.id,
+    res.locals.tenantId,
+  );
+  res.status(200).json(locations);
+});
+
+// ── Media Registration ─────────────────────────────────────────────────────────
+
+spacesRouter.post("/:id/walkthroughs/:wid/media", async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const wt = await getWalkthrough(db, req.params.wid, res.locals.tenantId);
+  if (!wt || wt.spaceId !== req.params.id) {
+    sendApiError(res, 404, "NOT_FOUND", "Walkthrough not found in this space");
+    return;
+  }
+
+  const type = typeof req.body?.type === "string" ? req.body.type.trim() : "";
+  const url = typeof req.body?.url === "string" ? req.body.url.trim() : "";
+  if (!type || !url) {
+    sendApiError(res, 400, "BAD_REQUEST", "type and url are required");
+    return;
+  }
+
+  const asset = await createMediaAsset(db, {
+    walkthroughId: req.params.wid,
+    tenantId: res.locals.tenantId,
+    type,
+    url,
+    thumbnailUrl:
+      typeof req.body?.thumbnailUrl === "string"
+        ? req.body.thumbnailUrl
+        : undefined,
+  });
+  res.status(201).json(asset);
 });

@@ -92,6 +92,7 @@ model StorageLocation {
   id          String   @id @default(cuid())
   spaceId     String
   zoneId      String?
+  parentId    String?
   tenantId    String
   name        String
   description String?
@@ -100,11 +101,14 @@ model StorageLocation {
 
   space               Space               @relation(fields: [spaceId], references: [id])
   zone                SpaceZone?          @relation(fields: [zoneId], references: [id])
+  parent              StorageLocation?    @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children            StorageLocation[]   @relation("LocationHierarchy")
   itemObservations    ItemObservation[]
   itemLocationHistory ItemLocationHistory[]
 
   @@index([spaceId])
   @@index([zoneId])
+  @@index([parentId])
 }
 
 // ── Inventory Items ───────────────────────────────────────────────────────────
