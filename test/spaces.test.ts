@@ -2362,3 +2362,240 @@ test("concurrent walkthrough processing: accept all items across walkthroughs", 
     await db.$disconnect();
   }
 });
+
+// ── Additional Coverage Hardening ─────────────────────────────────────────────
+
+test("POST /api/spaces/:id/observations rejects walkthrough that is already applied", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+
+    // Ingest + accept to get applied status
+    const ingRes = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        walkthroughId: wt.id,
+        items: [{ label: "test_item", confidence: 0.9 }],
+      }),
+    });
+    const ing = (await ingRes.json()) as { reviewTask: { id: string }; itemObservations: Array<{ id: string }> };
+    await fetch(url(address.port, `/api/review/${ing.reviewTask.id}/actions`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ actionType: "accept", observationId: ing.itemObservations[0].id }),
+    });
+
+    // Walkthrough should now be "applied" — ingest should be rejected
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        walkthroughId: wt.id,
+        items: [{ label: "late_item", confidence: 0.5 }],
+      }),
+    });
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("GET /api/spaces/:id/inventory filters by zoneId", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+
+    // Create a zone
+    const zoneRes = await fetch(url(address.port, `/api/spaces/${space.id}/zones`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ name: "Zone Alpha" }),
+    });
+    const zone = (await zoneRes.json()) as { id: string };
+
+    // Create item via walkthrough + accept
+    const wt = await createTestWalkthrough(address.port, space.id);
+    const ingRes = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        walkthroughId: wt.id,
+        items: [{ label: "zoned_item", confidence: 0.95, zoneId: zone.id }],
+      }),
+    });
+    const ing = (await ingRes.json()) as { reviewTask: { id: string }; itemObservations: Array<{ id: string }> };
+    await fetch(url(address.port, `/api/review/${ing.reviewTask.id}/actions`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ actionType: "accept", observationId: ing.itemObservations[0].id }),
+    });
+
+    // Search with matching zoneId
+    const resMatch = await fetch(
+      url(address.port, `/api/spaces/${space.id}/inventory?zoneId=${zone.id}`),
+      { headers: headers("tenant-a") },
+    );
+    const matchItems = (await resMatch.json()) as Array<{ name: string }>;
+    assert.equal(matchItems.length, 1);
+    assert.equal(matchItems[0].name, "zoned_item");
+
+    // Search with non-matching zoneId
+    const resNoMatch = await fetch(
+      url(address.port, `/api/spaces/${space.id}/inventory?zoneId=nonexistent`),
+      { headers: headers("tenant-a") },
+    );
+    const noMatchItems = (await resNoMatch.json()) as Array<unknown>;
+    assert.equal(noMatchItems.length, 0);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("tenant isolation: cannot access specific inventory item from another tenant", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port, "tenant-a");
+    const wt = await createTestWalkthrough(address.port, space.id, "tenant-a");
+
+    const ingRes = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        walkthroughId: wt.id,
+        items: [{ label: "exclusive_item", confidence: 0.95 }],
+      }),
+    });
+    const ing = (await ingRes.json()) as { reviewTask: { id: string }; itemObservations: Array<{ id: string }> };
+    await fetch(url(address.port, `/api/review/${ing.reviewTask.id}/actions`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ actionType: "accept", observationId: ing.itemObservations[0].id }),
+    });
+
+    // Get item id
+    const inv = await fetch(url(address.port, `/api/spaces/${space.id}/inventory`), {
+      headers: headers("tenant-a"),
+    });
+    const items = (await inv.json()) as Array<{ id: string }>;
+    const itemId = items[0].id;
+
+    // Cross-tenant access to specific item
+    const res = await fetch(
+      url(address.port, `/api/spaces/${space.id}/inventory/${itemId}`),
+      { headers: headers("tenant-b") },
+    );
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("POST /api/spaces/:id/observations accepts empty items and repairs arrays", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        walkthroughId: wt.id,
+        items: [],
+        repairs: [],
+      }),
+    });
+    assert.equal(res.status, 201);
+    const result = (await res.json()) as {
+      itemObservations: Array<unknown>;
+      repairObservations: Array<unknown>;
+      reviewTask: { id: string };
+    };
+    assert.equal(result.itemObservations.length, 0);
+    assert.equal(result.repairObservations.length, 0);
+    assert.ok(result.reviewTask.id.length > 0);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("POST /api/spaces/:id/observations with no items or repairs still creates review task", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ walkthroughId: wt.id }),
+    });
+    assert.equal(res.status, 201);
+    const result = (await res.json()) as { reviewTask: { id: string; status: string } };
+    assert.equal(result.reviewTask.status, "pending");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("POST /api/spaces/:id/observations rejects non-existent walkthrough", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        walkthroughId: "nonexistent_walkthrough_id",
+        items: [{ label: "orphan", confidence: 0.5 }],
+      }),
+    });
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});

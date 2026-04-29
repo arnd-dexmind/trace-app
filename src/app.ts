@@ -1,3 +1,5 @@
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import express from "express";
 import { ApiError, createRequestId, sendApiError, requireTenant } from "./lib/errors.js";
 import { db } from "./lib/db.js";
@@ -5,18 +7,21 @@ import { getMediaAsset } from "./data.js";
 import { spacesRouter } from "./routes/spaces.js";
 import { reviewRouter } from "./routes/review.js";
 
+const CLIENT_DIST = join(import.meta.dirname, "..", "client", "dist");
+const INDEX_PATH = join(CLIENT_DIST, "index.html");
+
 function renderPage() {
+  if (existsSync(INDEX_PATH)) {
+    return readFileSync(INDEX_PATH, "utf-8");
+  }
   return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>trace-app</title>
+    <title>Space Memory</title>
     <style>
       body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 2rem; max-width: 52rem; }
-      form { display: grid; gap: 0.5rem; margin-bottom: 1rem; }
-      input, textarea, button { font: inherit; padding: 0.5rem; }
-      li { margin-bottom: 0.75rem; }
       .muted { color: #666; }
     </style>
   </head>
@@ -73,6 +78,22 @@ export function createApp() {
 
   app.use("/api/spaces", spacesRouter);
   app.use("/api/review", reviewRouter);
+
+  // Serve React SPA in production
+  if (existsSync(CLIENT_DIST)) {
+    app.use(express.static(CLIENT_DIST));
+
+    // SPA fallback for client-side routes
+    const spaRoutes = ["/review", "/items", "/repairs"];
+    for (const route of spaRoutes) {
+      app.get(route, (_req, res) => {
+        res.type("html").send(renderPage());
+      });
+      app.get(`${route}/*`, (_req, res) => {
+        res.type("html").send(renderPage());
+      });
+    }
+  }
 
   app.use((req, _res, next) => {
     next(new ApiError(404, "NOT_FOUND", `No route for ${req.method} ${req.path}`));
