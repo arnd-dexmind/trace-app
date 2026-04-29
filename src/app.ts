@@ -1,5 +1,5 @@
 import express from "express";
-import { db } from "./lib/db.js";
+import { db, ensureDatabaseReady } from "./lib/db.js";
 import { createTraceRecord, listTraceRecords } from "./traces.js";
 
 type ApiErrorCode = "BAD_REQUEST" | "NOT_FOUND" | "INTERNAL_ERROR";
@@ -53,7 +53,7 @@ function renderPage() {
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>trace-app</title>
     <style>
-      body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 2rem; max-width: 52rem; }
+      body { background: #fff; color: #111; font-family: ui-sans-serif, system-ui, sans-serif; margin: 2rem; max-width: 52rem; }
       form { display: grid; gap: 0.5rem; margin-bottom: 1rem; }
       input, textarea, button { font: inherit; padding: 0.5rem; }
       li { margin-bottom: 0.75rem; }
@@ -71,7 +71,9 @@ function renderPage() {
     <ul id="trace-list"></ul>
     <script>
       async function loadTraces() {
-        const res = await fetch('/api/traces');
+        const res = await fetch('/api/traces', {
+          headers: { 'x-tenant-id': 'demo' },
+        });
         const traces = await res.json();
         const list = document.getElementById('trace-list');
         list.innerHTML = '';
@@ -162,6 +164,7 @@ export function createApp() {
       return;
     }
 
+    await ensureDatabaseReady();
     const traces = await listTraceRecords(db, tenantId);
     res.status(200).json(traces);
   });
@@ -181,6 +184,7 @@ export function createApp() {
       return;
     }
 
+    await ensureDatabaseReady();
     const trace = await createTraceRecord(db, { tenantId, title, body });
     res.status(201).json(trace);
   });
