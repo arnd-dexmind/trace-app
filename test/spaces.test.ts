@@ -33,17 +33,17 @@ async function createTestWalkthrough(port: number, spaceId: string, tenant = "te
 
 async function cleanDatabase() {
   await db.reviewAction.deleteMany();
-  await db.reviewTask.deleteMany();
   await db.itemIdentityLink.deleteMany();
   await db.itemLocationHistory.deleteMany();
-  await db.itemObservation.deleteMany();
   await db.repairObservation.deleteMany();
-  await db.repairIssue.deleteMany();
-  await db.inventoryItem.deleteMany();
-  await db.walkthrough.deleteMany();
+  await db.itemObservation.deleteMany();
+  await db.reviewTask.deleteMany();
   await db.mediaAsset.deleteMany();
+  await db.walkthrough.deleteMany();
+  await db.repairIssue.deleteMany();
   await db.storageLocation.deleteMany();
   await db.spaceZone.deleteMany();
+  await db.inventoryItem.deleteMany();
   await db.space.deleteMany();
 }
 
