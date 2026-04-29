@@ -1085,6 +1085,214 @@ test("PATCH /api/spaces/:id/repairs/:issueId updates repair status", async () =>
 });
 
 // ── Inventory Search ──────────────────────────────────────────────────────────
+// ── Repair Status Lifecycle ────────────────────────────────────────────────────
+
+test("PATCH repair status open → in_progress", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const createRes = await fetch(url(address.port, `/api/spaces/${space.id}/repairs`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ title: "Squeaky door" }),
+    });
+    const created = (await createRes.json()) as { id: string };
+
+    const patchRes = await fetch(
+      url(address.port, `/api/spaces/${space.id}/repairs/${created.id}`),
+      {
+        method: "PATCH",
+        headers: headers("tenant-a"),
+        body: JSON.stringify({ status: "in_progress" }),
+      },
+    );
+    assert.equal(patchRes.status, 200);
+    const updated = (await patchRes.json()) as { status: string };
+    assert.equal(updated.status, "in_progress");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("PATCH repair status in_progress → resolved sets resolvedAt", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const createRes = await fetch(url(address.port, `/api/spaces/${space.id}/repairs`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ title: "Cracked tile" }),
+    });
+    const created = (await createRes.json()) as { id: string };
+
+    await fetch(url(address.port, `/api/spaces/${space.id}/repairs/${created.id}`), {
+      method: "PATCH",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ status: "in_progress" }),
+    });
+
+    const patchRes = await fetch(
+      url(address.port, `/api/spaces/${space.id}/repairs/${created.id}`),
+      {
+        method: "PATCH",
+        headers: headers("tenant-a"),
+        body: JSON.stringify({ status: "resolved" }),
+      },
+    );
+    assert.equal(patchRes.status, 200);
+    const updated = (await patchRes.json()) as { status: string; resolvedAt: string | null };
+    assert.equal(updated.status, "resolved");
+    assert.ok(updated.resolvedAt !== null);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("PATCH repair status in_progress → open (reopen)", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const createRes = await fetch(url(address.port, `/api/spaces/${space.id}/repairs`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ title: "Loose railing" }),
+    });
+    const created = (await createRes.json()) as { id: string };
+
+    await fetch(url(address.port, `/api/spaces/${space.id}/repairs/${created.id}`), {
+      method: "PATCH",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ status: "in_progress" }),
+    });
+
+    const patchRes = await fetch(
+      url(address.port, `/api/spaces/${space.id}/repairs/${created.id}`),
+      {
+        method: "PATCH",
+        headers: headers("tenant-a"),
+        body: JSON.stringify({ status: "open" }),
+      },
+    );
+    assert.equal(patchRes.status, 200);
+    const updated = (await patchRes.json()) as { status: string };
+    assert.equal(updated.status, "open");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("PATCH repair status resolved → open (reopen)", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const createRes = await fetch(url(address.port, `/api/spaces/${space.id}/repairs`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ title: "Repaired but reopened" }),
+    });
+    const created = (await createRes.json()) as { id: string };
+
+    await fetch(url(address.port, `/api/spaces/${space.id}/repairs/${created.id}`), {
+      method: "PATCH",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ status: "resolved" }),
+    });
+
+    const patchRes = await fetch(
+      url(address.port, `/api/spaces/${space.id}/repairs/${created.id}`),
+      {
+        method: "PATCH",
+        headers: headers("tenant-a"),
+        body: JSON.stringify({ status: "open" }),
+      },
+    );
+    assert.equal(patchRes.status, 200);
+    const updated = (await patchRes.json()) as { status: string };
+    assert.equal(updated.status, "open");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("PATCH repair status rejects invalid status value", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const createRes = await fetch(url(address.port, `/api/spaces/${space.id}/repairs`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ title: "Test repair" }),
+    });
+    const created = (await createRes.json()) as { id: string };
+
+    const res = await fetch(
+      url(address.port, `/api/spaces/${space.id}/repairs/${created.id}`),
+      {
+        method: "PATCH",
+        headers: headers("tenant-a"),
+        body: JSON.stringify({ status: "cancelled" }),
+      },
+    );
+    assert.equal(res.status, 400);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("PATCH repair returns 404 for non-existent repair", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const res = await fetch(
+      url(address.port, `/api/spaces/${space.id}/repairs/nonexistent`),
+      {
+        method: "PATCH",
+        headers: headers("tenant-a"),
+        body: JSON.stringify({ status: "resolved" }),
+      },
+    );
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
 
 test("GET /api/spaces/:id/inventory/:itemId returns item with location history", async () => {
   await cleanDatabase();
@@ -1329,6 +1537,826 @@ test("full lifecycle: upload → process → review → applied", async () => {
     const detail = (await spaceDetail.json()) as { itemCount: number; repairCount: number };
     assert.equal(detail.itemCount, 2);
     assert.equal(detail.repairCount, 1);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+// ── Zones ──────────────────────────────────────────────────────────────────────
+
+test("POST /api/spaces/:id/zones creates a zone", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/zones`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ name: "Living Room", description: "Main living area" }),
+    });
+
+    assert.equal(res.status, 201);
+    const zone = (await res.json()) as { id: string; name: string; description: string; spaceId: string; tenantId: string };
+    assert.ok(zone.id.length > 0);
+    assert.equal(zone.name, "Living Room");
+    assert.equal(zone.description, "Main living area");
+    assert.equal(zone.spaceId, space.id);
+    assert.equal(zone.tenantId, "tenant-a");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("POST /api/spaces/:id/zones validates name", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/zones`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ description: "No name" }),
+    });
+
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as { error: { code: string } };
+    assert.equal(body.error.code, "BAD_REQUEST");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("GET /api/spaces/:id/zones lists zones", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    await fetch(url(address.port, `/api/spaces/${space.id}/zones`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ name: "Kitchen" }),
+    });
+    await fetch(url(address.port, `/api/spaces/${space.id}/zones`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ name: "Garage" }),
+    });
+
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/zones`), {
+      headers: headers("tenant-a"),
+    });
+    assert.equal(res.status, 200);
+    const zones = (await res.json()) as Array<{ name: string }>;
+    assert.equal(zones.length, 2);
+    assert.equal(zones[0].name, "Garage"); // alphabetical
+    assert.equal(zones[1].name, "Kitchen");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("GET /api/spaces/:id/zones enforces tenant isolation", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    await fetch(url(address.port, `/api/spaces/${space.id}/zones`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ name: "Zone A" }),
+    });
+
+    // tenant-b should not see tenant-a's zones
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/zones`), {
+      headers: headers("tenant-b"),
+    });
+    assert.equal(res.status, 404); // space not visible to tenant-b
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+// ── Storage Locations ──────────────────────────────────────────────────────────
+
+test("POST /api/spaces/:id/storage-locations creates a location", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/storage-locations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ name: "Shelf A", description: "Top shelf in kitchen" }),
+    });
+
+    assert.equal(res.status, 201);
+    const loc = (await res.json()) as { id: string; name: string; description: string; spaceId: string };
+    assert.ok(loc.id.length > 0);
+    assert.equal(loc.name, "Shelf A");
+    assert.equal(loc.description, "Top shelf in kitchen");
+    assert.equal(loc.spaceId, space.id);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("POST /api/spaces/:id/storage-locations with zone association", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const zoneRes = await fetch(url(address.port, `/api/spaces/${space.id}/zones`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ name: "Warehouse" }),
+    });
+    const zone = (await zoneRes.json()) as { id: string };
+
+    const locRes = await fetch(url(address.port, `/api/spaces/${space.id}/storage-locations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ name: "Rack 1", zoneId: zone.id }),
+    });
+
+    assert.equal(locRes.status, 201);
+    const loc = (await locRes.json()) as { zoneId: string };
+    assert.equal(loc.zoneId, zone.id);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("GET /api/spaces/:id/storage-locations returns nested tree", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+
+    // Create parent location
+    const parentRes = await fetch(url(address.port, `/api/spaces/${space.id}/storage-locations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ name: "Warehouse A" }),
+    });
+    const parent = (await parentRes.json()) as { id: string };
+
+    // Create child location
+    await fetch(url(address.port, `/api/spaces/${space.id}/storage-locations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ name: "Aisle 3", parentId: parent.id }),
+    });
+
+    const listRes = await fetch(url(address.port, `/api/spaces/${space.id}/storage-locations`), {
+      headers: headers("tenant-a"),
+    });
+    assert.equal(listRes.status, 200);
+    const locations = (await listRes.json()) as Array<{
+      name: string;
+      children: Array<{ name: string }>;
+    }>;
+    assert.equal(locations.length, 1); // only root
+    assert.equal(locations[0].name, "Warehouse A");
+    assert.equal(locations[0].children.length, 1);
+    assert.equal(locations[0].children[0].name, "Aisle 3");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("GET /api/spaces/:id/storage-locations includes zone info", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const zoneRes = await fetch(url(address.port, `/api/spaces/${space.id}/zones`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ name: "Section B" }),
+    });
+    const zone = (await zoneRes.json()) as { id: string; name: string };
+
+    await fetch(url(address.port, `/api/spaces/${space.id}/storage-locations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ name: "Bin 42", zoneId: zone.id }),
+    });
+
+    const listRes = await fetch(url(address.port, `/api/spaces/${space.id}/storage-locations`), {
+      headers: headers("tenant-a"),
+    });
+    const locations = (await listRes.json()) as Array<{
+      name: string;
+      zone: { name: string } | null;
+    }>;
+    assert.equal(locations.length, 1);
+    assert.equal(locations[0].name, "Bin 42");
+    assert.ok(locations[0].zone);
+    assert.equal(locations[0].zone!.name, "Section B");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+// ── Media Assets ───────────────────────────────────────────────────────────────
+
+test("POST /api/spaces/:id/walkthroughs/:wid/media registers media asset", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+
+    const res = await fetch(
+      url(address.port, `/api/spaces/${space.id}/walkthroughs/${wt.id}/media`),
+      {
+        method: "POST",
+        headers: headers("tenant-a"),
+        body: JSON.stringify({
+          type: "image",
+          url: "https://example.com/photo1.jpg",
+          thumbnailUrl: "https://example.com/photo1_thumb.jpg",
+        }),
+      },
+    );
+
+    assert.equal(res.status, 201);
+    const asset = (await res.json()) as {
+      id: string;
+      type: string;
+      url: string;
+      thumbnailUrl: string;
+      walkthroughId: string;
+      tenantId: string;
+    };
+    assert.ok(asset.id.length > 0);
+    assert.equal(asset.type, "image");
+    assert.equal(asset.url, "https://example.com/photo1.jpg");
+    assert.equal(asset.thumbnailUrl, "https://example.com/photo1_thumb.jpg");
+    assert.equal(asset.walkthroughId, wt.id);
+    assert.equal(asset.tenantId, "tenant-a");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("GET /api/media-assets/:id returns asset detail", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+
+    const createRes = await fetch(
+      url(address.port, `/api/spaces/${space.id}/walkthroughs/${wt.id}/media`),
+      {
+        method: "POST",
+        headers: headers("tenant-a"),
+        body: JSON.stringify({ type: "video", url: "https://example.com/video.mp4" }),
+      },
+    );
+    const created = (await createRes.json()) as { id: string };
+
+    const res = await fetch(url(address.port, `/api/media-assets/${created.id}`), {
+      headers: headers("tenant-a"),
+    });
+    assert.equal(res.status, 200);
+    const asset = (await res.json()) as {
+      id: string;
+      type: string;
+      url: string;
+      walkthrough: { id: string; spaceId: string; status: string };
+    };
+    assert.equal(asset.id, created.id);
+    assert.equal(asset.type, "video");
+    assert.equal(asset.url, "https://example.com/video.mp4");
+    assert.ok(asset.walkthrough);
+    assert.equal(asset.walkthrough.id, wt.id);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("GET /api/media-assets/:id enforces tenant isolation", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+
+    const createRes = await fetch(
+      url(address.port, `/api/spaces/${space.id}/walkthroughs/${wt.id}/media`),
+      {
+        method: "POST",
+        headers: headers("tenant-a"),
+        body: JSON.stringify({ type: "image", url: "https://example.com/secret.jpg" }),
+      },
+    );
+    const created = (await createRes.json()) as { id: string };
+
+    // tenant-b should not see tenant-a's media
+    const res = await fetch(url(address.port, `/api/media-assets/${created.id}`), {
+      headers: headers("tenant-b"),
+    });
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("GET /api/media-assets/:id returns 404 for non-existent asset", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const res = await fetch(url(address.port, "/api/media-assets/nonexistent"), {
+      headers: headers("tenant-a"),
+    });
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("POST /api/spaces/:id/walkthroughs/:wid/media validates required fields", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+
+    const res = await fetch(
+      url(address.port, `/api/spaces/${space.id}/walkthroughs/${wt.id}/media`),
+      {
+        method: "POST",
+        headers: headers("tenant-a"),
+        body: JSON.stringify({ type: "image" }), // missing url
+      },
+    );
+
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as { error: { code: string } };
+    assert.equal(body.error.code, "BAD_REQUEST");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+// ── Tenant Isolation ──────────────────────────────────────────────────────────
+
+test("tenant isolation: cannot access space from another tenant", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port, "tenant-a");
+
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}`), {
+      headers: headers("tenant-b"),
+    });
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("tenant isolation: cannot list walkthroughs of another tenant's space", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port, "tenant-a");
+
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/walkthroughs`), {
+      headers: headers("tenant-b"),
+    });
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("tenant isolation: cannot create walkthrough in another tenant's space", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port, "tenant-a");
+
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/walkthroughs`), {
+      method: "POST",
+      headers: headers("tenant-b"),
+      body: JSON.stringify({ metadata: { source: "test" } }),
+    });
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("tenant isolation: cannot access inventory of another tenant's space", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port, "tenant-a");
+
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/inventory`), {
+      headers: headers("tenant-b"),
+    });
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("tenant isolation: cannot access repairs of another tenant's space", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port, "tenant-a");
+
+    const res = await fetch(url(address.port, `/api/spaces/${space.id}/repairs`), {
+      headers: headers("tenant-b"),
+    });
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("tenant isolation: review queue scoped to requesting tenant", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const spaceA = await createTestSpace(address.port, "tenant-a");
+    const spaceB = await createTestSpace(address.port, "tenant-b");
+
+    const wtA = await createTestWalkthrough(address.port, spaceA.id, "tenant-a");
+    const wtB = await createTestWalkthrough(address.port, spaceB.id, "tenant-b");
+
+    await fetch(url(address.port, `/api/spaces/${spaceA.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ walkthroughId: wtA.id, items: [{ label: "itemA", confidence: 0.9 }] }),
+    });
+    await fetch(url(address.port, `/api/spaces/${spaceB.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-b"),
+      body: JSON.stringify({ walkthroughId: wtB.id, items: [{ label: "itemB", confidence: 0.9 }] }),
+    });
+
+    // tenant-a only sees its own review tasks
+    const queueA = await fetch(url(address.port, "/api/review/queue"), {
+      headers: headers("tenant-a"),
+    });
+    const tasksA = (await queueA.json()) as Array<{ id: string }>;
+    assert.equal(tasksA.length, 1);
+
+    // tenant-b only sees its own review tasks
+    const queueB = await fetch(url(address.port, "/api/review/queue"), {
+      headers: headers("tenant-b"),
+    });
+    const tasksB = (await queueB.json()) as Array<{ id: string }>;
+    assert.equal(tasksB.length, 1);
+
+    // The two tasks are different
+    assert.notEqual(tasksA[0].id, tasksB[0].id);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("tenant isolation: cannot access review task from another tenant", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port, "tenant-a");
+    const wt = await createTestWalkthrough(address.port, space.id, "tenant-a");
+
+    const ingRes = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ walkthroughId: wt.id, items: [{ label: "secret_item", confidence: 0.9 }] }),
+    });
+    const ingested = (await ingRes.json()) as { reviewTask: { id: string } };
+
+    const res = await fetch(
+      url(address.port, `/api/review/queue/${ingested.reviewTask.id}`),
+      { headers: headers("tenant-b") },
+    );
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("tenant isolation: cannot post review action to another tenant's task", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port, "tenant-a");
+    const wt = await createTestWalkthrough(address.port, space.id, "tenant-a");
+
+    const ingRes = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ walkthroughId: wt.id, items: [{ label: "locked_item", confidence: 0.9 }] }),
+    });
+    const ingested = (await ingRes.json()) as { reviewTask: { id: string }; itemObservations: Array<{ id: string }> };
+
+    const res = await fetch(
+      url(address.port, `/api/review/${ingested.reviewTask.id}/actions`),
+      {
+        method: "POST",
+        headers: headers("tenant-b"),
+        body: JSON.stringify({ actionType: "accept", observationId: ingested.itemObservations[0].id }),
+      },
+    );
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("tenant isolation: cannot patch repair from another tenant", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port, "tenant-a");
+    const createRes = await fetch(url(address.port, `/api/spaces/${space.id}/repairs`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ title: "Tenant A repair" }),
+    });
+    const repair = (await createRes.json()) as { id: string };
+
+    const res = await fetch(
+      url(address.port, `/api/spaces/${space.id}/repairs/${repair.id}`),
+      {
+        method: "PATCH",
+        headers: headers("tenant-b"),
+        body: JSON.stringify({ status: "resolved" }),
+      },
+    );
+    assert.equal(res.status, 404);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+// ── Concurrent Walkthrough Processing ─────────────────────────────────────────
+
+test("concurrent walkthroughs on same space produce isolated observations", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+
+    // Create two walkthroughs
+    const wt1 = await createTestWalkthrough(address.port, space.id);
+    const wt2 = await createTestWalkthrough(address.port, space.id);
+
+    // Ingest observations for both
+    await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        walkthroughId: wt1.id,
+        items: [
+          { label: "alpha", confidence: 0.99 },
+          { label: "beta", confidence: 0.88 },
+        ],
+      }),
+    });
+
+    await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        walkthroughId: wt2.id,
+        items: [
+          { label: "gamma", confidence: 0.77 },
+        ],
+      }),
+    });
+
+    // Verify walkthrough statuses are independent
+    const wts = await fetch(url(address.port, `/api/spaces/${space.id}/walkthroughs`), {
+      headers: headers("tenant-a"),
+    });
+    const wtsList = (await wts.json()) as Array<{ id: string; status: string }>;
+
+    const wt1Updated = wtsList.find((w: { id: string }) => w.id === wt1.id);
+    const wt2Updated = wtsList.find((w: { id: string }) => w.id === wt2.id);
+    assert.equal(wt1Updated!.status, "awaiting_review");
+    assert.equal(wt2Updated!.status, "awaiting_review");
+
+    // Verify review tasks are separate
+    const queue = await fetch(url(address.port, "/api/review/queue"), {
+      headers: headers("tenant-a"),
+    });
+    const tasks = (await queue.json()) as Array<{ id: string; walkthrough: { id: string } }>;
+    assert.equal(tasks.length, 2);
+
+    const wtIds = tasks.map((t: { walkthrough: { id: string } }) => t.walkthrough.id).sort();
+    assert.ok(wtIds.includes(wt1.id));
+    assert.ok(wtIds.includes(wt2.id));
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("concurrent walkthrough processing: accept all items across walkthroughs", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+
+    // Walkthrough 1 with items
+    const wt1 = await createTestWalkthrough(address.port, space.id);
+    const ing1 = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        walkthroughId: wt1.id,
+        items: [{ label: "hammer", confidence: 0.95 }],
+      }),
+    });
+    const i1 = (await ing1.json()) as { reviewTask: { id: string }; itemObservations: Array<{ id: string }> };
+
+    // Walkthrough 2 with items
+    const wt2 = await createTestWalkthrough(address.port, space.id);
+    const ing2 = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        walkthroughId: wt2.id,
+        items: [{ label: "wrench", confidence: 0.91 }],
+      }),
+    });
+    const i2 = (await ing2.json()) as { reviewTask: { id: string }; itemObservations: Array<{ id: string }> };
+
+    // Accept item from wt1
+    await fetch(url(address.port, `/api/review/${i1.reviewTask.id}/actions`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ actionType: "accept", observationId: i1.itemObservations[0].id }),
+    });
+
+    // Accept item from wt2
+    await fetch(url(address.port, `/api/review/${i2.reviewTask.id}/actions`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ actionType: "accept", observationId: i2.itemObservations[0].id }),
+    });
+
+    // Both walkthroughs are now applied
+    const wts = await fetch(url(address.port, `/api/spaces/${space.id}/walkthroughs`), {
+      headers: headers("tenant-a"),
+    });
+    const wtsList = (await wts.json()) as Array<{ id: string; status: string }>;
+    assert.equal(wtsList.find((w: { id: string }) => w.id === wt1.id)!.status, "applied");
+    assert.equal(wtsList.find((w: { id: string }) => w.id === wt2.id)!.status, "applied");
+
+    // Inventory has both items
+    const inv = await fetch(url(address.port, `/api/spaces/${space.id}/inventory`), {
+      headers: headers("tenant-a"),
+    });
+    const items = (await inv.json()) as Array<{ name: string }>;
+    const names = items.map((it: { name: string }) => it.name).sort();
+    assert.deepEqual(names, ["hammer", "wrench"]);
   } finally {
     server.close();
     await db.$disconnect();
