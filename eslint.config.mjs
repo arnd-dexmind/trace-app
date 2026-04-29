@@ -33,6 +33,6 @@ export default [
     }
   },
   {
-    ignores: ["dist/**", "node_modules/**"]
+    ignores: ["dist/**", "client/dist/**", "node_modules/**"]
   }
 ];

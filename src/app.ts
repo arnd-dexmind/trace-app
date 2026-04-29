@@ -1,5 +1,6 @@
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { ApiError, createRequestId, sendApiError, requireTenant } from "./lib/errors.js";
 import { db } from "./lib/db.js";
@@ -7,7 +8,8 @@ import { getMediaAsset } from "./data.js";
 import { spacesRouter } from "./routes/spaces.js";
 import { reviewRouter } from "./routes/review.js";
 
-const CLIENT_DIST = join(import.meta.dirname, "..", "client", "dist");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CLIENT_DIST = join(__dirname, "..", "client", "dist");
 const INDEX_PATH = join(CLIENT_DIST, "index.html");
 
 function renderPage() {
