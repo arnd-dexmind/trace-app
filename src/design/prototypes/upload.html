@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Upload Walkthrough — Space Memory</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+  .app-shell {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 var(--sm-space-4);
+  }
+
+  /* --- Top nav --- */
+  .top-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-4) 0;
+    border-bottom: 1px solid var(--sm-border-default);
+    margin-bottom: var(--sm-space-10);
+  }
+  .top-nav .logo {
+    font-size: var(--sm-text-lg);
+    font-weight: var(--sm-font-bold);
+    color: var(--sm-text-primary);
+    text-decoration: none;
+  }
+  .top-nav .nav-link {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-secondary);
+    text-decoration: none;
+    padding: var(--sm-space-1) var(--sm-space-2);
+    border-radius: var(--sm-radius-md);
+  }
+  .top-nav .nav-link:hover { color: var(--sm-text-primary); background: var(--sm-neutral-100); }
+  .top-nav .nav-link.active { color: var(--sm-brand-600); }
+
+  /* --- Upload page --- */
+  .upload-container {
+    text-align: center;
+  }
+  .upload-container h1 {
+    font-size: var(--sm-text-2xl);
+    font-weight: var(--sm-font-bold);
+    margin-bottom: var(--sm-space-2);
+  }
+  .upload-container > .subtitle {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+    margin-bottom: var(--sm-space-8);
+  }
+
+  /* --- Space selector --- */
+  .space-selector {
+    margin-bottom: var(--sm-space-6);
+    text-align: left;
+  }
+  .space-selector label {
+    display: block;
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    margin-bottom: var(--sm-space-2);
+  }
+  .space-selector select {
+    width: 100%;
+    font: inherit;
+    font-size: var(--sm-text-base);
+    padding: var(--sm-space-3) var(--sm-space-4);
+    border: 2px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-surface-card);
+    color: var(--sm-text-primary);
+    min-height: var(--sm-touch-target);
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 40px;
+  }
+
+  /* --- Upload drop zone --- */
+  .drop-zone {
+    border: 2px dashed var(--sm-border-strong);
+    border-radius: var(--sm-radius-xl);
+    padding: var(--sm-space-12) var(--sm-space-6);
+    margin-bottom: var(--sm-space-6);
+    cursor: pointer;
+    transition: border-color var(--sm-transition-fast), background var(--sm-transition-fast);
+    background: var(--sm-surface-card);
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--sm-brand-400);
+    background: var(--sm-brand-50);
+  }
+  .drop-zone .dz-icon {
+    font-size: 48px;
+    margin-bottom: var(--sm-space-4);
+    display: block;
+  }
+  .drop-zone .dz-title {
+    font-size: var(--sm-text-lg);
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: var(--sm-space-1);
+  }
+  .drop-zone .dz-hint {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+  }
+  .drop-zone .dz-formats {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+    margin-top: var(--sm-space-3);
+  }
+  .file-input { display: none; }
+
+  /* --- Progress states --- */
+  .upload-state {
+    display: none;
+    margin-bottom: var(--sm-space-6);
+  }
+  .upload-state.visible { display: block; }
+
+  /* Selected file */
+  .selected-file {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-3);
+    padding: var(--sm-space-3) var(--sm-space-4);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-surface-card);
+    margin-bottom: var(--sm-space-4);
+    text-align: left;
+  }
+  .selected-file .sf-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+  .selected-file .sf-body { flex: 1; min-width: 0; }
+  .selected-file .sf-name {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .selected-file .sf-size {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-secondary);
+  }
+  .selected-file .sf-remove {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: var(--sm-text-tertiary);
+    cursor: pointer;
+    padding: var(--sm-space-1);
+    border-radius: var(--sm-radius-sm);
+  }
+  .selected-file .sf-remove:hover { color: var(--sm-danger-600); }
+
+  /* Progress bar */
+  .progress-container { margin-bottom: var(--sm-space-4); text-align: left; }
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--sm-space-2);
+  }
+  .progress-header .ph-label {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+  }
+  .progress-header .ph-pct {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+  }
+  .progress-track {
+    width: 100%;
+    height: 8px;
+    border-radius: var(--sm-radius-full);
+    background: var(--sm-neutral-200);
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: var(--sm-radius-full);
+    background: var(--sm-brand-500);
+    transition: width 300ms ease;
+  }
+
+  /* Processing stages */
+  .processing-stages {
+    text-align: left;
+    margin-top: var(--sm-space-4);
+  }
+  .stage-item {
+    display: flex;
+    gap: var(--sm-space-3);
+    padding: var(--sm-space-2) 0;
+    font-size: var(--sm-text-sm);
+    align-items: center;
+  }
+  .stage-icon {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .stage-icon.pending { border: 2px solid var(--sm-neutral-300); }
+  .stage-icon.active { border: 2px solid var(--sm-brand-500); background: var(--sm-brand-500); color: #fff; animation: pulse 1.5s ease infinite; }
+  .stage-icon.done { border: 2px solid var(--sm-success-500); background: var(--sm-success-500); color: #fff; }
+  .stage-text.pending { color: var(--sm-text-tertiary); }
+  .stage-text.active { color: var(--sm-text-primary); font-weight: var(--sm-font-medium); }
+  .stage-text.done { color: var(--sm-text-secondary); }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.3); }
+    50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+  }
+
+  /* Result card */
+  .result-card {
+    text-align: left;
+    padding: var(--sm-space-6);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-xl);
+    background: var(--sm-surface-card);
+    margin-bottom: var(--sm-space-4);
+  }
+  .result-card.success { border-color: #bbf7d0; background: #f0fdf4; }
+  .result-card.error { border-color: #fecaca; background: #fef2f2; }
+  .result-card .result-icon {
+    font-size: 32px;
+    margin-bottom: var(--sm-space-3);
+    display: block;
+  }
+  .result-card h3 { font-size: var(--sm-text-lg); margin-bottom: var(--sm-space-1); }
+  .result-card .result-meta {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+    margin-bottom: var(--sm-space-3);
+  }
+  .result-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--sm-space-3);
+    margin-bottom: var(--sm-space-4);
+  }
+  .result-stat {
+    text-align: center;
+    padding: var(--sm-space-3);
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-surface-card);
+    border: 1px solid var(--sm-border-default);
+  }
+  .result-stat .rs-value {
+    font-size: var(--sm-text-xl);
+    font-weight: var(--sm-font-bold);
+  }
+  .result-stat .rs-label {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-secondary);
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sm-space-2);
+    font: inherit;
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    padding: var(--sm-space-2) var(--sm-space-6);
+    border-radius: var(--sm-radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    min-height: var(--sm-touch-target);
+    transition: background var(--sm-transition-fast);
+    white-space: nowrap;
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--sm-border-focus);
+    outline-offset: 2px;
+  }
+  .btn-primary {
+    background: var(--sm-brand-600);
+    color: var(--sm-text-inverse);
+  }
+  .btn-primary:hover { background: var(--sm-brand-700); }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-outline {
+    background: var(--sm-surface-card);
+    border-color: var(--sm-border-default);
+    color: var(--sm-text-primary);
+  }
+  .btn-outline:hover { background: var(--sm-neutral-50); }
+
+  @media (max-width: 640px) {
+    .result-stats { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- ===== Top Nav ===== -->
+  <nav class="top-nav">
+    <a href="#" class="logo">Space Memory</a>
+    <a href="item-search.html" class="nav-link">Items</a>
+    <a href="repair-list.html" class="nav-link">Repairs</a>
+    <a href="#" class="nav-link">Walkthroughs</a>
+    <a href="upload.html" class="nav-link active">Upload</a>
+  </nav>
+
+  <!-- ===== Upload (state: idle) ===== -->
+  <div class="upload-container">
+    <h1>Upload Walkthrough</h1>
+    <p class="subtitle">Upload video or image sequence for AI extraction</p>
+
+    <!-- Space selector -->
+    <div class="space-selector">
+      <label for="space-select">Space</label>
+      <select id="space-select">
+        <option>Warehouse A-12 — Floor 3</option>
+        <option>Office B-04 — Floor 2</option>
+        <option>Lab C-01 — Floor 1</option>
+      </select>
+    </div>
+
+    <!-- State: Idle — Drop zone -->
+    <div class="upload-state visible" id="state-idle">
+      <div class="drop-zone" id="drop-zone">
+        <span class="dz-icon">&#128249;</span>
+        <p class="dz-title">Drop walkthrough video here</p>
+        <p class="dz-hint">or tap to browse files</p>
+        <p class="dz-formats">MP4, MOV, or image sequence (ZIP) &middot; up to 2 GB</p>
+      </div>
+      <input type="file" class="file-input" id="file-input" accept="video/mp4,video/quicktime,application/zip" />
+    </div>
+
+    <!-- State: File selected -->
+    <div class="upload-state" id="state-selected">
+      <div class="selected-file">
+        <span class="sf-icon">&#127910;</span>
+        <div class="sf-body">
+          <div class="sf-name" id="selected-name">walkthrough_a12_apr29.mp4</div>
+          <div class="sf-size" id="selected-size">847 MB</div>
+        </div>
+        <button class="sf-remove" id="btn-remove" aria-label="Remove file">&times;</button>
+      </div>
+      <button class="btn btn-primary" id="btn-upload">Start Upload &amp; Processing</button>
+    </div>
+
+    <!-- State: Uploading / Processing -->
+    <div class="upload-state" id="state-processing">
+      <div class="progress-container">
+        <div class="progress-header">
+          <span class="ph-label" id="progress-label">Uploading…</span>
+          <span class="ph-pct" id="progress-pct">42%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill" style="width: 42%"></div>
+        </div>
+      </div>
+
+      <div class="processing-stages">
+        <div class="stage-item">
+          <span class="stage-icon done">&#10003;</span>
+          <span class="stage-text done">Upload video</span>
+        </div>
+        <div class="stage-item">
+          <span class="stage-icon active"></span>
+          <span class="stage-text active">Extracting frames (847 / 2,016)</span>
+        </div>
+        <div class="stage-item">
+          <span class="stage-icon pending"></span>
+          <span class="stage-text pending">AI item detection</span>
+        </div>
+        <div class="stage-item">
+          <span class="stage-icon pending"></span>
+          <span class="stage-text pending">Review queue ready</span>
+        </div>
+      </div>
+
+      <p style="font-size:var(--sm-text-xs);color:var(--sm-text-tertiary);margin-top:var(--sm-space-4);">
+        Processing time ~2 minutes. You can leave this page.
+      </p>
+    </div>
+
+    <!-- State: Complete -->
+    <div class="upload-state" id="state-complete">
+      <div class="result-card success">
+        <span class="result-icon">&#9989;</span>
+        <h3>Processing Complete</h3>
+        <p class="result-meta">Walkthrough A-12 processed in 1m 48s</p>
+
+        <div class="result-stats">
+          <div class="result-stat">
+            <div class="rs-value">47</div>
+            <div class="rs-label">Items Detected</div>
+          </div>
+          <div class="result-stat">
+            <div class="rs-value">12</div>
+            <div class="rs-label">Pending Review</div>
+          </div>
+          <div class="result-stat">
+            <div class="rs-value">3</div>
+            <div class="rs-label">Repairs Flagged</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:var(--sm-space-3);flex-wrap:wrap;">
+          <button class="btn btn-primary">Open in Operator Console</button>
+          <button class="btn btn-outline">Upload Another</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- State: Error -->
+    <div class="upload-state" id="state-error">
+      <div class="result-card error">
+        <span class="result-icon">&#9888;&#65039;</span>
+        <h3>Processing Failed</h3>
+        <p class="result-meta">Frame extraction failed at 23%. The video file may be corrupted.</p>
+        <button class="btn btn-outline" id="btn-retry">Try Again</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // State management (demo switching between states)
+  var dropZone = document.getElementById('drop-zone');
+  var fileInput = document.getElementById('file-input');
+  var states = {
+    idle: document.getElementById('state-idle'),
+    selected: document.getElementById('state-selected'),
+    processing: document.getElementById('state-processing'),
+    complete: document.getElementById('state-complete'),
+    error: document.getElementById('state-error')
+  };
+
+  function showState(name) {
+    Object.keys(states).forEach(function(k) {
+      states[k].classList.remove('visible');
+    });
+    states[name].classList.add('visible');
+  }
+
+  // Drop zone click -> file picker
+  dropZone.addEventListener('click', function() { fileInput.click(); });
+
+  // File selected
+  fileInput.addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    document.getElementById('selected-name').textContent = file.name;
+    document.getElementById('selected-size').textContent = (file.size / 1e6).toFixed(0) + ' MB';
+    showState('selected');
+  });
+
+  // Drag and drop
+  dropZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', function() {
+    dropZone.classList.remove('drag-over');
+  });
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    var file = e.dataTransfer.files[0];
+    if (file) {
+      document.getElementById('selected-name').textContent = file.name;
+      document.getElementById('selected-size').textContent = (file.size / 1e6).toFixed(0) + ' MB';
+      showState('selected');
+    }
+  });
+
+  // Remove file
+  document.getElementById('btn-remove').addEventListener('click', function() {
+    fileInput.value = '';
+    showState('idle');
+  });
+
+  // Upload -> show processing (demo)
+  document.getElementById('btn-upload').addEventListener('click', function() {
+    showState('processing');
+    // Simulate progress for demo
+    var pct = 42;
+    var interval = setInterval(function() {
+      pct += Math.random() * 10;
+      if (pct >= 100) {
+        pct = 100;
+        clearInterval(interval);
+        setTimeout(function() { showState('complete'); }, 400);
+      }
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-pct').textContent = Math.round(pct) + '%';
+    }, 800);
+  });
+
+  document.getElementById('btn-retry').addEventListener('click', function() {
+    showState('selected');
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Repair List — Space Memory</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+  .app-shell {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 var(--sm-space-4);
+  }
+
+  /* --- Top nav --- */
+  .top-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-4) 0;
+    border-bottom: 1px solid var(--sm-border-default);
+    margin-bottom: var(--sm-space-6);
+  }
+  .top-nav .logo {
+    font-size: var(--sm-text-lg);
+    font-weight: var(--sm-font-bold);
+    color: var(--sm-text-primary);
+    text-decoration: none;
+  }
+  .top-nav .nav-link {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-secondary);
+    text-decoration: none;
+    padding: var(--sm-space-1) var(--sm-space-2);
+    border-radius: var(--sm-radius-md);
+  }
+  .top-nav .nav-link:hover { color: var(--sm-text-primary); background: var(--sm-neutral-100); }
+  .top-nav .nav-link.active { color: var(--sm-brand-600); }
+
+  /* --- Page header --- */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--sm-space-6);
+    flex-wrap: wrap;
+    gap: var(--sm-space-3);
+  }
+  .page-header h1 {
+    font-size: var(--sm-text-2xl);
+    font-weight: var(--sm-font-bold);
+  }
+  .page-header .count {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+  }
+
+  /* --- Filter bar --- */
+  .filter-bar {
+    display: flex;
+    gap: var(--sm-space-3);
+    margin-bottom: var(--sm-space-6);
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filter-pill {
+    font: inherit;
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    padding: var(--sm-space-1) var(--sm-space-4);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-full);
+    background: var(--sm-surface-card);
+    color: var(--sm-text-secondary);
+    cursor: pointer;
+    transition: all var(--sm-transition-fast);
+    min-height: 36px;
+  }
+  .filter-pill:hover { border-color: var(--sm-neutral-300); color: var(--sm-text-primary); }
+  .filter-pill.active {
+    background: var(--sm-brand-600);
+    border-color: var(--sm-brand-600);
+    color: var(--sm-text-inverse);
+  }
+  .filter-separator { width: 1px; height: 24px; background: var(--sm-border-default); margin: 0 var(--sm-space-1); }
+  .sort-select {
+    font: inherit;
+    font-size: var(--sm-text-sm);
+    padding: var(--sm-space-1) var(--sm-space-3);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-surface-card);
+    color: var(--sm-text-primary);
+    margin-left: auto;
+  }
+
+  /* --- Repair table (desktop) --- */
+  .repair-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .repair-table th {
+    text-align: left;
+    font-size: var(--sm-text-xs);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: var(--sm-space-2) var(--sm-space-4);
+    border-bottom: 1px solid var(--sm-border-default);
+  }
+  .repair-table td {
+    padding: var(--sm-space-3) var(--sm-space-4);
+    border-bottom: 1px solid var(--sm-border-default);
+    font-size: var(--sm-text-sm);
+    vertical-align: middle;
+  }
+  .repair-table tbody tr {
+    cursor: pointer;
+    transition: background var(--sm-transition-fast);
+  }
+  .repair-table tbody tr:hover { background: var(--sm-neutral-50); }
+  .issue-title {
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: 2px;
+  }
+  .issue-item {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-secondary);
+  }
+
+  /* Status badge */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 3px 10px;
+    border-radius: var(--sm-radius-full);
+    white-space: nowrap;
+  }
+  .status-badge.open { background: #fef3c7; color: #92400e; }
+  .status-badge.monitoring { background: #dbeafe; color: #1e40af; }
+  .status-badge.resolved { background: #dcfce7; color: #166534; }
+
+  .severity {
+    font-size: 11px;
+    font-weight: var(--sm-font-semibold);
+    padding: 2px 8px;
+    border-radius: var(--sm-radius-sm);
+    white-space: nowrap;
+  }
+  .severity.high { background: #fee2e2; color: var(--sm-danger-700); }
+  .severity.medium { background: #fef9c3; color: var(--sm-warning-600); }
+  .severity.low { background: var(--sm-neutral-100); color: var(--sm-text-secondary); }
+
+  /* --- Card view (mobile) --- */
+  .repair-cards { display: none; }
+
+  .repair-card {
+    padding: var(--sm-space-4);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-lg);
+    margin-bottom: var(--sm-space-3);
+    cursor: pointer;
+    transition: box-shadow var(--sm-transition-fast);
+  }
+  .repair-card:hover { box-shadow: var(--sm-shadow-sm); }
+  .repair-card .rc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--sm-space-2);
+    margin-bottom: var(--sm-space-2);
+  }
+  .repair-card .rc-title {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-semibold);
+  }
+  .repair-card .rc-meta {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-secondary);
+    display: flex;
+    gap: var(--sm-space-3);
+    flex-wrap: wrap;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: var(--sm-space-16) var(--sm-space-4);
+    color: var(--sm-text-tertiary);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: var(--sm-space-4); }
+  .empty-state p { font-size: var(--sm-text-sm); max-width: 320px; margin: 0 auto; }
+
+  @media (max-width: 768px) {
+    .repair-table { display: none; }
+    .repair-cards { display: block; }
+    .filter-bar { gap: var(--sm-space-2); }
+    .filter-pill { font-size: var(--sm-text-xs); padding: var(--sm-space-1) var(--sm-space-3); }
+    .sort-select, .filter-separator { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- ===== Top Nav ===== -->
+  <nav class="top-nav">
+    <a href="#" class="logo">Space Memory</a>
+    <a href="item-search.html" class="nav-link">Items</a>
+    <a href="repair-list.html" class="nav-link active">Repairs</a>
+    <a href="#" class="nav-link">Walkthroughs</a>
+    <a href="upload.html" class="nav-link">Upload</a>
+  </nav>
+
+  <!-- ===== Page Header ===== -->
+  <div class="page-header">
+    <div>
+      <h1>Repair Issues</h1>
+      <span class="count">8 issues across 6 items</span>
+    </div>
+  </div>
+
+  <!-- ===== Filter Bar ===== -->
+  <div class="filter-bar">
+    <button class="filter-pill active">All</button>
+    <button class="filter-pill">Open <span style="opacity:0.7;margin-left:4px;">3</span></button>
+    <button class="filter-pill">Monitoring <span style="opacity:0.7;margin-left:4px;">2</span></button>
+    <button class="filter-pill">Resolved <span style="opacity:0.7;margin-left:4px;">3</span></button>
+    <span class="filter-separator"></span>
+    <select class="sort-select">
+      <option>Sort: Severity</option>
+      <option>Sort: Date detected</option>
+      <option>Sort: Status</option>
+    </select>
+  </div>
+
+  <!-- ===== Table (desktop) ===== -->
+  <table class="repair-table">
+    <thead>
+      <tr>
+        <th>Issue</th>
+        <th>Location</th>
+        <th>Detected</th>
+        <th>Severity</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>
+          <div class="issue-title">Handle grip missing</div>
+          <div class="issue-item">Pallet Jack #PJ-002</div>
+        </td>
+        <td>Zone 3-B &middot; Loading Dock</td>
+        <td>Apr 29, 2026</td>
+        <td><span class="severity high">High</span></td>
+        <td><span class="status-badge open">Open</span></td>
+      </tr>
+      <tr>
+        <td>
+          <div class="issue-title">Missing inspection tag</div>
+          <div class="issue-item">Fire Extinguisher #FE-042</div>
+        </td>
+        <td>Zone 3-A &middot; Wall East</td>
+        <td>Apr 29, 2026</td>
+        <td><span class="severity medium">Medium</span></td>
+        <td><span class="status-badge open">Open</span></td>
+      </tr>
+      <tr>
+        <td>
+          <div class="issue-title">Bulb below 80% luminance</div>
+          <div class="issue-item">Exit Sign #ES-011</div>
+        </td>
+        <td>Zone 2-A &middot; Overhead North</td>
+        <td>Apr 29, 2026</td>
+        <td><span class="severity medium">Medium</span></td>
+        <td><span class="status-badge monitoring">Monitoring</span></td>
+      </tr>
+      <tr>
+        <td>
+          <div class="issue-title">Dent on housing</div>
+          <div class="issue-item">Fire Extinguisher #FE-043</div>
+        </td>
+        <td>Zone 3-B &middot; Floor Level</td>
+        <td>Apr 28, 2026</td>
+        <td><span class="severity low">Low</span></td>
+        <td><span class="status-badge monitoring">Monitoring</span></td>
+      </tr>
+      <tr>
+        <td>
+          <div class="issue-title">Pressure gauge reading low</div>
+          <div class="issue-item">Fire Extinguisher #FE-042</div>
+        </td>
+        <td>Zone 3-A &middot; Wall East</td>
+        <td>Mar 28, 2026</td>
+        <td><span class="severity medium">Medium</span></td>
+        <td><span class="status-badge resolved">Resolved</span></td>
+      </tr>
+      <tr>
+        <td>
+          <div class="issue-title">Mounting bracket loose</div>
+          <div class="issue-item">First Aid Kit #FA-018</div>
+        </td>
+        <td>Zone 2-B &middot; Cabinet</td>
+        <td>Mar 14, 2026</td>
+        <td><span class="severity low">Low</span></td>
+        <td><span class="status-badge open">Open</span></td>
+      </tr>
+      <tr>
+        <td>
+          <div class="issue-title">Safety seal broken</div>
+          <div class="issue-item">First Aid Kit #FA-018</div>
+        </td>
+        <td>Zone 2-B &middot; Cabinet</td>
+        <td>Feb 28, 2026</td>
+        <td><span class="severity high">High</span></td>
+        <td><span class="status-badge resolved">Resolved</span></td>
+      </tr>
+      <tr>
+        <td>
+          <div class="issue-title">Wheels not locking</div>
+          <div class="issue-item">Ladder L-003</div>
+        </td>
+        <td>Zone 1-C &middot; Storage Rack B</td>
+        <td>Feb 20, 2026</td>
+        <td><span class="severity high">High</span></td>
+        <td><span class="status-badge resolved">Resolved</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ===== Card view (mobile) ===== -->
+  <div class="repair-cards">
+    <div class="repair-card">
+      <div class="rc-header">
+        <span class="rc-title">Handle grip missing</span>
+        <span class="status-badge open">Open</span>
+      </div>
+      <div class="rc-meta">
+        <span>Pallet Jack #PJ-002</span>
+        <span>Zone 3-B</span>
+        <span>Apr 29</span>
+        <span class="severity high">High</span>
+      </div>
+    </div>
+    <div class="repair-card">
+      <div class="rc-header">
+        <span class="rc-title">Missing inspection tag</span>
+        <span class="status-badge open">Open</span>
+      </div>
+      <div class="rc-meta">
+        <span>FE-042</span>
+        <span>Zone 3-A</span>
+        <span>Apr 29</span>
+        <span class="severity medium">Medium</span>
+      </div>
+    </div>
+    <div class="repair-card">
+      <div class="rc-header">
+        <span class="rc-title">Bulb below 80% luminance</span>
+        <span class="status-badge monitoring">Monitoring</span>
+      </div>
+      <div class="rc-meta">
+        <span>ES-011</span>
+        <span>Zone 2-A</span>
+        <span>Apr 29</span>
+        <span class="severity medium">Medium</span>
+      </div>
+    </div>
+    <div class="repair-card">
+      <div class="rc-header">
+        <span class="rc-title">Dent on housing</span>
+        <span class="status-badge monitoring">Monitoring</span>
+      </div>
+      <div class="rc-meta">
+        <span>FE-043</span>
+        <span>Zone 3-B</span>
+        <span>Apr 28</span>
+        <span class="severity low">Low</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Item Search — Space Memory</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+  .app-shell {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 var(--sm-space-4);
+  }
+
+  /* --- Top nav --- */
+  .top-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-4) 0;
+    border-bottom: 1px solid var(--sm-border-default);
+    margin-bottom: var(--sm-space-6);
+  }
+  .top-nav .logo {
+    font-size: var(--sm-text-lg);
+    font-weight: var(--sm-font-bold);
+    color: var(--sm-text-primary);
+    text-decoration: none;
+  }
+  .top-nav .nav-link {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-secondary);
+    text-decoration: none;
+    padding: var(--sm-space-1) var(--sm-space-2);
+    border-radius: var(--sm-radius-md);
+  }
+  .top-nav .nav-link:hover { color: var(--sm-text-primary); background: var(--sm-neutral-100); }
+  .top-nav .nav-link.active { color: var(--sm-brand-600); }
+
+  /* --- Search bar --- */
+  .search-section {
+    margin-bottom: var(--sm-space-6);
+  }
+  .search-wrapper {
+    position: relative;
+  }
+  .search-input {
+    width: 100%;
+    font: inherit;
+    font-size: var(--sm-text-lg);
+    padding: var(--sm-space-3) var(--sm-space-4);
+    padding-left: 48px;
+    border: 2px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-lg);
+    background: var(--sm-surface-card);
+    color: var(--sm-text-primary);
+    transition: border-color var(--sm-transition-fast);
+    -webkit-appearance: none;
+  }
+  .search-input:focus {
+    outline: none;
+    border-color: var(--sm-border-focus);
+  }
+  .search-input::placeholder { color: var(--sm-text-tertiary); }
+  .search-icon {
+    position: absolute;
+    left: var(--sm-space-4);
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--sm-text-tertiary);
+    font-size: 20px;
+    pointer-events: none;
+  }
+
+  /* --- Autocomplete dropdown --- */
+  .autocomplete {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--sm-surface-card);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-md);
+    box-shadow: var(--sm-shadow-lg);
+    z-index: 50;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .autocomplete-item {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-3);
+    padding: var(--sm-space-2) var(--sm-space-4);
+    cursor: pointer;
+    transition: background var(--sm-transition-fast);
+  }
+  .autocomplete-item:hover, .autocomplete-item.focused { background: var(--sm-neutral-50); }
+  .autocomplete-item .ac-icon {
+    width: 32px; height: 32px;
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-neutral-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .autocomplete-item .ac-text { font-size: var(--sm-text-sm); }
+  .autocomplete-item .ac-category {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+  }
+
+  /* --- Results --- */
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--sm-space-4);
+    flex-wrap: wrap;
+    gap: var(--sm-space-2);
+  }
+  .results-header h2 {
+    font-size: var(--sm-text-base);
+    font-weight: var(--sm-font-semibold);
+  }
+  .results-count {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+  }
+
+  /* Result card */
+  .result-card {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-4);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-lg);
+    margin-bottom: var(--sm-space-3);
+    cursor: pointer;
+    transition: box-shadow var(--sm-transition-fast), border-color var(--sm-transition-fast);
+    text-decoration: none;
+    color: inherit;
+  }
+  .result-card:hover {
+    border-color: var(--sm-brand-300);
+    box-shadow: var(--sm-shadow-sm);
+  }
+  .result-card .rc-icon {
+    width: 48px; height: 48px;
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-neutral-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+  .result-card .rc-body { flex: 1; min-width: 0; }
+  .result-card .rc-name {
+    font-size: var(--sm-text-base);
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: 2px;
+  }
+  .result-card .rc-meta {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+    display: flex;
+    gap: var(--sm-space-3);
+    flex-wrap: wrap;
+  }
+  .result-card .rc-meta span { white-space: nowrap; }
+  .result-card .rc-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .result-card .rc-arrow {
+    color: var(--sm-text-tertiary);
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  /* Category chip */
+  .category-chip {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 1px 8px;
+    border-radius: var(--sm-radius-full);
+    background: var(--sm-neutral-100);
+    color: var(--sm-text-secondary);
+  }
+
+  /* Status dot */
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .status-dot.in-place { background: var(--sm-success-500); }
+  .status-dot.moved { background: var(--sm-warning-400); }
+  .status-dot.missing { background: var(--sm-danger-500); }
+  .status-dot.unseen { background: var(--sm-neutral-400); }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: var(--sm-space-16) var(--sm-space-4);
+    color: var(--sm-text-tertiary);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: var(--sm-space-4); }
+  .empty-state p { font-size: var(--sm-text-sm); max-width: 320px; margin: 0 auto; }
+
+  @media (max-width: 640px) {
+    .top-nav { flex-wrap: wrap; }
+    .result-card { padding: var(--sm-space-3); gap: var(--sm-space-3); }
+    .result-card .rc-icon { width: 40px; height: 40px; font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- ===== Top Nav ===== -->
+  <nav class="top-nav">
+    <a href="#" class="logo">Space Memory</a>
+    <a href="#" class="nav-link active">Items</a>
+    <a href="#" class="nav-link">Repairs</a>
+    <a href="#" class="nav-link">Walkthroughs</a>
+    <a href="#" class="nav-link">Upload</a>
+  </nav>
+
+  <!-- ===== Search ===== -->
+  <div class="search-section">
+    <div class="search-wrapper" id="search-wrapper">
+      <span class="search-icon">&#128269;</span>
+      <input
+        class="search-input"
+        id="search-input"
+        type="search"
+        placeholder="Search items by name, category, or location…"
+        autocomplete="off"
+        role="combobox"
+        aria-expanded="true"
+        aria-controls="autocomplete-list"
+        value="extinguisher"
+      />
+      <!-- Autocomplete dropdown -->
+      <div class="autocomplete" id="autocomplete-list" role="listbox">
+        <div class="autocomplete-item" role="option">
+          <div class="ac-icon">&#129519;</div>
+          <div>
+            <div class="ac-text">Fire Extinguisher #FE-042</div>
+            <div class="ac-category">Safety Equipment &middot; Zone 3-A</div>
+          </div>
+        </div>
+        <div class="autocomplete-item" role="option">
+          <div class="ac-icon">&#129519;</div>
+          <div>
+            <div class="ac-text">Fire Extinguisher #FE-043</div>
+            <div class="ac-category">Safety Equipment &middot; Zone 3-B</div>
+          </div>
+        </div>
+        <div class="autocomplete-item" role="option">
+          <div class="ac-icon">&#129519;</div>
+          <div>
+            <div class="ac-text">CO₂ Extinguisher #CE-005</div>
+            <div class="ac-category">Safety Equipment &middot; Zone 2-A</div>
+          </div>
+        </div>
+        <div class="autocomplete-item" role="option">
+          <div class="ac-icon">&#129519;</div>
+          <div>
+            <div class="ac-text">Foam Extinguisher #FX-001</div>
+            <div class="ac-category">Safety Equipment &middot; Zone 1-B</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Results ===== -->
+  <div class="results-header">
+    <h2>Results</h2>
+    <span class="results-count">6 items found</span>
+  </div>
+
+  <div class="results-list">
+    <a href="item-detail.html" class="result-card">
+      <div class="rc-icon">&#129519;</div>
+      <div class="rc-body">
+        <div class="rc-name">Fire Extinguisher #FE-042</div>
+        <div class="rc-meta">
+          <span class="category-chip">Safety Equipment</span>
+          <span>Zone 3-A &middot; Wall Mount East</span>
+          <span class="rc-status"><span class="status-dot in-place"></span> In place</span>
+          <span>Last seen Apr 29, 2026</span>
+        </div>
+      </div>
+      <span class="rc-arrow">&#8594;</span>
+    </a>
+
+    <a href="item-detail.html" class="result-card">
+      <div class="rc-icon">&#129519;</div>
+      <div class="rc-body">
+        <div class="rc-name">Fire Extinguisher #FE-043</div>
+        <div class="rc-meta">
+          <span class="category-chip">Safety Equipment</span>
+          <span>Zone 3-B &middot; Floor Level</span>
+          <span class="rc-status"><span class="status-dot moved"></span> Moved</span>
+          <span>Last seen Apr 28, 2026</span>
+        </div>
+      </div>
+      <span class="rc-arrow">&#8594;</span>
+    </a>
+
+    <a href="item-detail.html" class="result-card">
+      <div class="rc-icon">&#129519;</div>
+      <div class="rc-body">
+        <div class="rc-name">CO₂ Extinguisher #CE-005</div>
+        <div class="rc-meta">
+          <span class="category-chip">Safety Equipment</span>
+          <span>Zone 2-A &middot; Wall Mount North</span>
+          <span class="rc-status"><span class="status-dot in-place"></span> In place</span>
+          <span>Last seen Apr 28, 2026</span>
+        </div>
+      </div>
+      <span class="rc-arrow">&#8594;</span>
+    </a>
+
+    <a href="item-detail.html" class="result-card">
+      <div class="rc-icon">&#129519;</div>
+      <div class="rc-body">
+        <div class="rc-name">Foam Extinguisher #FX-001</div>
+        <div class="rc-meta">
+          <span class="category-chip">Safety Equipment</span>
+          <span>Zone 1-B &middot; Corner Station</span>
+          <span class="rc-status"><span class="status-dot in-place"></span> In place</span>
+          <span>Last seen Apr 27, 2026</span>
+        </div>
+      </div>
+      <span class="rc-arrow">&#8594;</span>
+    </a>
+
+    <a href="item-detail.html" class="result-card">
+      <div class="rc-icon">&#128678;</div>
+      <div class="rc-body">
+        <div class="rc-name">Exit Sign #ES-011</div>
+        <div class="rc-meta">
+          <span class="category-chip">Signage</span>
+          <span>Zone 2-A &middot; Overhead North</span>
+          <span class="rc-status"><span class="status-dot in-place"></span> In place</span>
+          <span>Last seen Apr 29, 2026</span>
+        </div>
+      </div>
+      <span class="rc-arrow">&#8594;</span>
+    </a>
+
+    <a href="item-detail.html" class="result-card">
+      <div class="rc-icon">&#128736;</div>
+      <div class="rc-body">
+        <div class="rc-name">Pallet Jack #PJ-002</div>
+        <div class="rc-meta">
+          <span class="category-chip">Equipment</span>
+          <span>Zone 3-B &middot; Loading Dock</span>
+          <span class="rc-status"><span class="status-dot in-place"></span> In place</span>
+          <span>Last seen Apr 29, 2026</span>
+        </div>
+      </div>
+      <span class="rc-arrow">&#8594;</span>
+    </a>
+  </div>
+</div>
+
+<script>
+  const input = document.getElementById('search-input');
+  const list = document.getElementById('autocomplete-list');
+
+  // Collapse autocomplete on outside click
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('search-wrapper').contains(e.target)) {
+      list.style.display = 'none';
+    }
+  });
+
+  input.addEventListener('focus', () => { list.style.display = ''; });
+
+  // Keyboard nav for autocomplete
+  input.addEventListener('keydown', (e) => {
+    const items = list.querySelectorAll('.autocomplete-item');
+    const focused = list.querySelector('.focused');
+    let idx = Array.from(items).indexOf(focused);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      idx = Math.min(idx + 1, items.length - 1);
+      items.forEach(i => i.classList.remove('focused'));
+      items[idx]?.classList.add('focused');
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      idx = Math.max(idx - 1, 0);
+      items.forEach(i => i.classList.remove('focused'));
+      items[idx]?.classList.add('focused');
+    } else if (e.key === 'Enter' && focused) {
+      e.preventDefault();
+      window.location.href = 'item-detail.html';
+    } else if (e.key === 'Escape') {
+      list.style.display = 'none';
+    }
+  });
+</script>
+
+</body>
+</html>

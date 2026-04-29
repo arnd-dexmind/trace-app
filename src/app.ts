@@ -1,49 +1,7 @@
 import express from "express";
-import { db } from "./lib/db.js";
-import { createTraceRecord, listTraceRecords } from "./traces.js";
-
-type ApiErrorCode = "BAD_REQUEST" | "NOT_FOUND" | "INTERNAL_ERROR";
-
-class ApiError extends Error {
-  status: number;
-  code: ApiErrorCode;
-
-  constructor(status: number, code: ApiErrorCode, message: string) {
-    super(message);
-    this.status = status;
-    this.code = code;
-  }
-}
-
-function createRequestId() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function sendApiError(
-  res: express.Response,
-  status: number,
-  code: ApiErrorCode,
-  message: string,
-) {
-  res.status(status).json({
-    error: {
-      code,
-      message,
-      requestId: String(res.locals.requestId || ""),
-    },
-  });
-}
-
-function parseTenantId(raw: string | undefined) {
-  const value = (raw || "").trim();
-  if (!value) {
-    return null;
-  }
-  if (!/^[a-zA-Z0-9_-]{2,64}$/.test(value)) {
-    return null;
-  }
-  return value;
-}
+import { ApiError, createRequestId, sendApiError } from "./lib/errors.js";
+import { spacesRouter } from "./routes/spaces.js";
+import { reviewRouter } from "./routes/review.js";
 
 function renderPage() {
   return `<!doctype html>
@@ -61,61 +19,8 @@ function renderPage() {
     </style>
   </head>
   <body>
-    <h1>Trace Records</h1>
-    <form id="trace-form">
-      <input id="title" name="title" placeholder="Title" required />
-      <textarea id="body" name="body" placeholder="Optional details"></textarea>
-      <button type="submit">Create trace</button>
-    </form>
-    <p class="muted" id="status"></p>
-    <ul id="trace-list"></ul>
-    <script>
-      async function loadTraces() {
-        const res = await fetch('/api/traces');
-        const traces = await res.json();
-        const list = document.getElementById('trace-list');
-        list.innerHTML = '';
-        traces.forEach((trace) => {
-          const li = document.createElement('li');
-          const body = trace.body ? '<div>' + trace.body + '</div>' : '';
-          li.innerHTML =
-            '<strong>' + trace.title + '</strong>' +
-            body +
-            '<div class="muted">' + new Date(trace.createdAt).toLocaleString() + '</div>';
-          list.appendChild(li);
-        });
-      }
-
-      document.getElementById('trace-form').addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const status = document.getElementById('status');
-        status.textContent = 'Saving...';
-        const payload = {
-          title: document.getElementById('title').value,
-          body: document.getElementById('body').value,
-        };
-
-        const res = await fetch('/api/traces', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-tenant-id': 'demo' },
-          body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-          status.textContent = 'Failed to create trace';
-          return;
-        }
-
-        document.getElementById('trace-form').reset();
-        status.textContent = 'Trace created';
-        await loadTraces();
-      });
-
-      loadTraces().catch(() => {
-        const status = document.getElementById('status');
-        status.textContent = 'Failed to load traces';
-      });
-    </script>
+    <h1>Space Memory</h1>
+    <p class="muted">API available at /api/spaces and /api/review</p>
   </body>
 </html>`;
 }
@@ -155,35 +60,8 @@ export function createApp() {
     res.status(200).json({ status: "ok" });
   });
 
-  app.get("/api/traces", async (req, res) => {
-    const tenantId = parseTenantId(req.header("x-tenant-id"));
-    if (!tenantId) {
-      sendApiError(res, 400, "BAD_REQUEST", "x-tenant-id header is required");
-      return;
-    }
-
-    const traces = await listTraceRecords(db, tenantId);
-    res.status(200).json(traces);
-  });
-
-  app.post("/api/traces", async (req, res) => {
-    const tenantId = parseTenantId(req.header("x-tenant-id"));
-    if (!tenantId) {
-      sendApiError(res, 400, "BAD_REQUEST", "x-tenant-id header is required");
-      return;
-    }
-
-    const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
-    const body = typeof req.body?.body === "string" ? req.body.body : undefined;
-
-    if (!title) {
-      sendApiError(res, 400, "BAD_REQUEST", "title is required");
-      return;
-    }
-
-    const trace = await createTraceRecord(db, { tenantId, title, body });
-    res.status(201).json(trace);
-  });
+  app.use("/api/spaces", spacesRouter);
+  app.use("/api/review", reviewRouter);
 
   app.use((req, _res, next) => {
     next(new ApiError(404, "NOT_FOUND", `No route for ${req.method} ${req.path}`));
