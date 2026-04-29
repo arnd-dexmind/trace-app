@@ -7,6 +7,7 @@ import {
   listSpaces,
   createWalkthrough,
   listWalkthroughs,
+  startProcessing,
   searchItems,
   getItem,
   listRepairs,
@@ -85,6 +86,20 @@ spacesRouter.get("/:id/walkthroughs", async (req, res) => {
     res.locals.tenantId,
   );
   res.status(200).json(walkthroughs);
+});
+
+spacesRouter.post("/:id/walkthroughs/:walkthroughId/process", async (req, res) => {
+  void req.body;
+  const result = await startProcessing(
+    db,
+    req.params.walkthroughId,
+    res.locals.tenantId,
+  );
+  if (!result) {
+    sendApiError(res, 404, "NOT_FOUND", "Walkthrough not found or not in uploaded state");
+    return;
+  }
+  res.status(200).json(result);
 });
 
 // ── Inventory ─────────────────────────────────────────────────────────────────

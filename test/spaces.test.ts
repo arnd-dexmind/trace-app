@@ -31,6 +31,14 @@ async function createTestWalkthrough(port: number, spaceId: string, tenant = "te
   return (await res.json()) as { id: string; status: string };
 }
 
+async function processWalkthrough(port: number, spaceId: string, walkthroughId: string, tenant = "tenant-a") {
+  const res = await fetch(url(port, `/api/spaces/${spaceId}/walkthroughs/${walkthroughId}/process`), {
+    method: "POST",
+    headers: headers(tenant),
+  });
+  return (await res.json()) as { id: string; status: string; processedAt: string | null };
+}
+
 async function cleanDatabase() {
   await db.reviewAction.deleteMany();
   await db.itemIdentityLink.deleteMany();
@@ -229,6 +237,55 @@ test("GET /api/spaces/:id/walkthroughs lists walkthroughs", async () => {
     assert.equal(res.status, 200);
     const list = (await res.json()) as Array<{ status: string }>;
     assert.equal(list.length, 2);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+// ── Processing ────────────────────────────────────────────────────────────────
+
+test("POST /api/spaces/:id/walkthroughs/:wid/process transitions uploaded → processing", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+    assert.equal(wt.status, "uploaded");
+
+    const result = await processWalkthrough(address.port, space.id, wt.id);
+    assert.equal(result.status, "processing");
+    assert.ok(result.processedAt !== null);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("process endpoint rejects non-uploaded walkthrough", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+
+    // Process once
+    await processWalkthrough(address.port, space.id, wt.id);
+
+    // Process again — should fail since status is now "processing"
+    const res = await fetch(
+      url(address.port, `/api/spaces/${space.id}/walkthroughs/${wt.id}/process`),
+      { method: "POST", headers: headers("tenant-a") },
+    );
+    assert.equal(res.status, 404);
   } finally {
     server.close();
     await db.$disconnect();
@@ -788,6 +845,15 @@ test("full lifecycle: upload → process → review → applied", async () => {
     });
     const wt = (await wtRes.json()) as { id: string; status: string };
     assert.equal(wt.status, "uploaded");
+
+    // 2b. Start processing (simulates async video extraction)
+    const procRes = await fetch(
+      url(address.port, `/api/spaces/${space.id}/walkthroughs/${wt.id}/process`),
+      { method: "POST", headers: headers("tenant-x") },
+    );
+    const procWt = (await procRes.json()) as { status: string; processedAt: string };
+    assert.equal(procWt.status, "processing");
+    assert.ok(procWt.processedAt !== null);
 
     // 3. Process — ingest observations (simulates extraction)
     const ingRes = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
