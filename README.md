@@ -23,14 +23,14 @@ For full architecture, see [Space Memory MVP Architecture and 90-Day Plan](docs/
 
 1. Node.js 20+
 2. `npm install`
-3. `npm run db:generate && npm run db:migrate`
-4. `npm run dev`
+3. `npm run db:generate && npm run db:migrate:deploy`
+4. `npm run db:seed` (optional demo data)
+5. `npm run dev`
 5. Local checks: `npm run lint && npm run typecheck && npm run test`
 
 ## Stack
 
-- TypeScript, Express, Prisma, SQLite (local dev)
-- Postgres (production)
+- TypeScript, Express, Prisma, PostgreSQL
 - Object storage for video and frame evidence
 
 ## Repo conventions
