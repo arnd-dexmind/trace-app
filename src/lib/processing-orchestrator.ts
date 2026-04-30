@@ -3,8 +3,8 @@ import { dequeue, completeJob, failJob, isLastStage, getJobs } from "./job-queue
 import { extractKeyframes } from "./frame-extractor.js";
 import { buildSceneBundles, pickRepresentativeFrames } from "./scene-segmenter.js";
 import { runMultimodalExtraction } from "./multimodal-extractor.js";
-import { matchObservationsToInventory, matchRepairsToIssues } from "./entity-matcher.js";
-import { generateWalkthroughDiff } from "./diff-generator.js";
+import { matchObservationsToInventoryWithMetrics, matchRepairsToIssues } from "./entity-matcher.js";
+import { generateWalkthroughDiff, applyAutoItems } from "./diff-generator.js";
 
 export async function processNextJob(
   db: PrismaClient,
@@ -156,6 +156,29 @@ async function stageFrameExtraction(db: PrismaClient, walkthroughId: string, ten
 
   const result = await extractKeyframes(db, walkthroughId, tenantId);
 
+  // Persist frame metadata for later stages (sceneScore, timestamp)
+  if (result.frames.length > 0) {
+    const wt = await db.walkthrough.findUnique({
+      where: { id: walkthroughId },
+      select: { metadata: true },
+    });
+    const existingMeta = wt?.metadata ? JSON.parse(String(wt.metadata)) : {};
+    await db.walkthrough.update({
+      where: { id: walkthroughId },
+      data: {
+        metadata: JSON.stringify({
+          ...existingMeta,
+          extractedFrames: result.frames.map((f) => ({
+            url: f.url,
+            assetId: f.assetId,
+            timestamp: f.timestamp,
+            sceneScore: f.sceneScore,
+          })),
+        }),
+      },
+    });
+  }
+
   console.log(JSON.stringify({
     level: result.error ? "warn" : "info",
     message: result.error
@@ -251,12 +274,12 @@ async function stageMultimodalExtraction(db: PrismaClient, walkthroughId: string
   }));
 }
 
-/** Match extracted observations against existing inventory. */
+/** Match extracted observations against existing inventory using multi-factor identity resolution. */
 async function stageEntityMatching(db: PrismaClient, walkthroughId: string, tenantId: string) {
   const spaceId = await getWalkthroughSpaceId(db, walkthroughId);
 
-  const [itemResults, repairLinked] = await Promise.all([
-    matchObservationsToInventory(db, walkthroughId, spaceId, tenantId),
+  const [{ results: itemResults, metrics }, repairLinked] = await Promise.all([
+    matchObservationsToInventoryWithMetrics(db, walkthroughId, spaceId, tenantId),
     matchRepairsToIssues(db, walkthroughId, spaceId, tenantId),
   ]);
 
@@ -264,21 +287,45 @@ async function stageEntityMatching(db: PrismaClient, walkthroughId: string, tena
 
   console.log(JSON.stringify({
     level: "info",
-    message: `Matched ${matchedItems}/${itemResults.length} items, linked ${repairLinked} repairs`,
+    message: `Identity resolution: ${metrics.matched} matched, ${metrics.ambiguous} ambiguous, ${metrics.likelyNew} likely new (${matchedItems} linked, ${repairLinked} repairs)`,
     walkthroughId,
     stage: "entity_matching",
+    identityMetrics: metrics,
   }));
 }
 
-/** Generate diff against previous walkthrough. */
+/** Generate diff against previous walkthrough, auto-apply high-confidence changes, and store results. */
 async function stageDiffGeneration(db: PrismaClient, walkthroughId: string, tenantId: string) {
   const spaceId = await getWalkthroughSpaceId(db, walkthroughId);
 
   const diff = await generateWalkthroughDiff(db, walkthroughId, spaceId, tenantId);
 
+  // Auto-apply high-confidence unchanged items
+  const autoApplied = await applyAutoItems(db, diff, tenantId);
+
+  // Store diff in walkthrough metadata for operator review
+  const wt = await db.walkthrough.findUnique({
+    where: { id: walkthroughId },
+    select: { metadata: true },
+  });
+  const existingMeta = wt?.metadata ? JSON.parse(String(wt.metadata)) : {};
+  await db.walkthrough.update({
+    where: { id: walkthroughId },
+    data: {
+      metadata: JSON.stringify({
+        ...existingMeta,
+        diff: {
+          summary: diff.summary,
+          previousWalkthroughId: diff.previousWalkthroughId,
+          generatedAt: new Date().toISOString(),
+        },
+      }),
+    },
+  });
+
   console.log(JSON.stringify({
     level: "info",
-    message: `Diff: ${diff.newItems.length} new, ${diff.movedItems.length} moved, ${diff.missingItems.length} missing, ${diff.newRepairs.length} new repairs`,
+    message: `Diff: ${diff.summary.newItems} new, ${diff.summary.movedItems} moved, ${diff.summary.missingItems} missing, ${diff.summary.unchangedItems} unchanged (${autoApplied} auto-applied), ${diff.summary.newRepairs} new repairs, ${diff.summary.resolvedRepairs} resolved repairs`,
     walkthroughId,
     stage: "diff_generation",
   }));
@@ -301,6 +348,24 @@ async function finalizePipeline(
   walkthroughId: string,
   tenantId: string,
 ) {
+  // Check if all observations are already processed (auto-applied by diff engine)
+  const pendingCount = await db.itemObservation.count({
+    where: { walkthroughId, status: "pending" },
+  });
+
+  if (pendingCount === 0) {
+    // All observations auto-applied — complete any existing review task and skip review
+    await db.reviewTask.updateMany({
+      where: { walkthroughId, status: "pending" },
+      data: { status: "completed" },
+    });
+    await db.walkthrough.update({
+      where: { id: walkthroughId },
+      data: { status: "applied", completedAt: new Date() },
+    });
+    return;
+  }
+
   await db.reviewTask.upsert({
     where: { walkthroughId },
     create: {
