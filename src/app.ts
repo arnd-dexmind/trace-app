@@ -61,7 +61,7 @@ export function createApp() {
     next();
   });
 
-  app.use(express.json());
+  app.use(express.json({ limit: "1mb" }));
 
   app.get("/", (_req, res) => {
     res.type("html").send(renderPage());
@@ -137,6 +137,11 @@ export function createApp() {
         return;
       }
       sendApiError(res, 400, "BAD_REQUEST", err.message);
+      return;
+    }
+
+    if (err instanceof Error && "type" in err && (err as Record<string, unknown>).type === "entity.too.large") {
+      sendApiError(res, 413, "BAD_REQUEST", "Request body too large (max 1MB)");
       return;
     }
 
