@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import { ApiError, createRequestId, sendApiError, requireTenant } from "./lib/errors.js";
 import { db } from "./lib/db.js";
+import { upload, UPLOADS_DIR } from "./lib/upload.js";
 import { getMediaAsset } from "./data.js";
+import multer from "multer";
 import { spacesRouter } from "./routes/spaces.js";
 import { reviewRouter } from "./routes/review.js";
 
@@ -65,8 +67,13 @@ export function createApp() {
     res.type("html").send(renderPage());
   });
 
-  app.get("/api/health", (_req, res) => {
-    res.status(200).json({ status: "ok" });
+  app.get("/api/health", async (_req, res) => {
+    try {
+      await db.$queryRaw`SELECT 1`;
+      res.status(200).json({ status: "ok", db: "connected" });
+    } catch {
+      res.status(503).json({ status: "degraded", db: "disconnected" });
+    }
   });
 
   app.get("/api/media-assets/:id", requireTenant, async (req, res) => {
@@ -76,6 +83,22 @@ export function createApp() {
       return;
     }
     res.status(200).json(asset);
+  });
+
+  app.use("/uploads", express.static(UPLOADS_DIR));
+
+  app.post("/api/uploads", requireTenant, upload.single("file"), (req, res) => {
+    if (!req.file) {
+      sendApiError(res, 400, "BAD_REQUEST", "No file provided");
+      return;
+    }
+    res.status(201).json({
+      url: `/uploads/${req.file.filename}`,
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+    });
   });
 
   app.use("/api/spaces", spacesRouter);
@@ -105,6 +128,15 @@ export function createApp() {
     void next;
     if (err instanceof ApiError) {
       sendApiError(res, err.status, err.code, err.message);
+      return;
+    }
+
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        sendApiError(res, 413, "BAD_REQUEST", "File too large (max 50MB)");
+        return;
+      }
+      sendApiError(res, 400, "BAD_REQUEST", err.message);
       return;
     }
 

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createApp } from "../src/app.js";
 
-test("GET /api/health returns ok", async () => {
+test("GET /api/health returns ok with db connected", async () => {
   const app = createApp();
   const server = app.listen(0);
 
@@ -15,8 +15,9 @@ test("GET /api/health returns ok", async () => {
     const response = await fetch(`http://127.0.0.1:${address.port}/api/health`);
     assert.equal(response.status, 200);
 
-    const body = (await response.json()) as { status: string };
+    const body = (await response.json()) as { status: string; db: string };
     assert.equal(body.status, "ok");
+    assert.equal(body.db, "connected");
   } finally {
     server.close();
   }

@@ -10,3 +10,7 @@ coverage/
 # Local SQLite artifacts
 *.db
 *.db-journal
+
+# File uploads
+uploads/
+.vercel
