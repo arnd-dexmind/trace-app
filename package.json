@@ -1,8 +1,8 @@
 {
-  "name": "trace-app",
+  "name": "perifeye-app",
   "version": "0.1.0",
   "private": true,
-  "description": "MVP trace application",
+  "description": "MVP PerifEye application",
   "engines": {
     "node": ">=20"
   },
@@ -16,6 +16,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev --name init",
     "db:migrate:deploy": "prisma migrate deploy",
+    "postinstall": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "client:install": "cd client && npm install",
     "client:dev": "cd client && npx vite",
