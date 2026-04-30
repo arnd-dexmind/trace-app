@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { enqueuePipeline, getJobs as getJobsQueue, getProcessingMetrics as getMetricsQueue } from "./lib/job-queue.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ export async function createWalkthrough(
   db: PrismaClient,
   params: { spaceId: string; tenantId: string; metadata?: Record<string, unknown> },
 ) {
-  return db.walkthrough.create({
+  const walkthrough = await db.walkthrough.create({
     data: {
       spaceId: params.spaceId,
       tenantId: params.tenantId,
@@ -75,6 +76,14 @@ export async function createWalkthrough(
       metadata: params.metadata ? JSON.stringify(params.metadata) : null,
     },
   });
+
+  // Auto-enqueue the processing pipeline
+  await enqueuePipeline(db, {
+    walkthroughId: walkthrough.id,
+    tenantId: params.tenantId,
+  });
+
+  return walkthrough;
 }
 
 export async function listWalkthroughs(
@@ -216,24 +225,54 @@ export async function searchItems(
   db: PrismaClient,
   params: { spaceId: string; tenantId: string; name?: string; zoneId?: string },
 ) {
-  const where: Record<string, unknown> = {
-    spaceId: params.spaceId,
-    tenantId: params.tenantId,
-  };
+  let items: Awaited<ReturnType<typeof db.inventoryItem.findMany>>;
 
-  if (params.name) {
-    where.name = { contains: params.name };
+  if (params.name && params.name.trim()) {
+    const query = params.name.trim();
+
+    // Full-text search with ts_rank for ranking
+    items = await db.$queryRaw`
+      SELECT i.*, ts_rank(i."searchVector", plainto_tsquery('english', ${query})) AS rank
+      FROM "InventoryItem" i
+      WHERE i."spaceId" = ${params.spaceId}
+        AND i."tenantId" = ${params.tenantId}
+        AND i."searchVector" @@ plainto_tsquery('english', ${query})
+      ORDER BY rank DESC
+      LIMIT 100
+    `;
+  } else {
+    items = await db.inventoryItem.findMany({
+      where: {
+        spaceId: params.spaceId,
+        tenantId: params.tenantId,
+        ...(params.zoneId ? { locationHistory: { some: { zoneId: params.zoneId } } } : {}),
+      },
+      orderBy: { name: "asc" },
+      take: 100,
+    });
   }
 
-  if (params.zoneId) {
-    where.locationHistory = { some: { zoneId: params.zoneId } };
-  }
+  if (items.length === 0) return items;
 
-  return db.inventoryItem.findMany({
-    where,
-    orderBy: { name: "asc" },
-    take: 100,
+  const itemIds = items.map((i) => i.id);
+  const allHistory = await db.itemLocationHistory.findMany({
+    where: { itemId: { in: itemIds } },
+    orderBy: { observedAt: "desc" },
+    include: {
+      zone: { select: { id: true, name: true } },
+      storageLocation: { select: { id: true, name: true } },
+    },
   });
+
+  const latestByItemId = new Map<string, (typeof allHistory)[number]>();
+  for (const h of allHistory) {
+    if (!latestByItemId.has(h.itemId)) latestByItemId.set(h.itemId, h);
+  }
+
+  return items.map((item) => ({
+    ...item,
+    latestLocation: latestByItemId.get(item.id) ?? null,
+  }));
 }
 
 export async function getItem(
@@ -259,10 +298,16 @@ export async function getItem(
 
   const identityLinks = await db.itemIdentityLink.findMany({
     where: { itemId },
-    include: { observation: { select: { id: true, label: true, confidence: true } } },
+    include: { observation: { select: { id: true, label: true, confidence: true, keyframeUrl: true } } },
   });
 
-  return { ...item, locationHistory, identityLinks };
+  const repairIssues = await db.repairIssue.findMany({
+    where: { itemId },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+
+  return { ...item, locationHistory, identityLinks, repairIssues };
 }
 
 export async function createItem(
@@ -329,6 +374,22 @@ export async function createRepair(
       status: "open",
     },
   });
+}
+
+export async function getRepair(
+  db: PrismaClient,
+  issueId: string,
+  spaceId: string,
+  tenantId: string,
+) {
+  const issue = await db.repairIssue.findUnique({
+    where: { id: issueId },
+    include: { item: true, repairObservations: { include: { walkthrough: true } } },
+  });
+  if (!issue || issue.tenantId !== tenantId || issue.spaceId !== spaceId) {
+    return null;
+  }
+  return issue;
 }
 
 export async function updateRepairStatus(
@@ -429,6 +490,65 @@ export async function listStorageLocations(
   });
 }
 
+// ── Diff ─────────────────────────────────────────────────────────────────────
+
+export async function getWalkthroughDiff(
+  db: PrismaClient,
+  walkthroughId: string,
+  tenantId: string,
+) {
+  const wt = await db.walkthrough.findUnique({
+    where: { id: walkthroughId },
+    select: { id: true, metadata: true, tenantId: true, spaceId: true, status: true },
+  });
+  if (!wt || wt.tenantId !== tenantId) return null;
+
+  const meta = wt.metadata ? JSON.parse(String(wt.metadata)) : {};
+  const storedDiff = meta.diff ?? null;
+
+  // Always include current observation state alongside stored diff summary
+  const [itemObs, repairObs] = await Promise.all([
+    db.itemObservation.findMany({
+      where: { walkthroughId },
+      include: {
+        zone: { select: { id: true, name: true } },
+        storageLocation: { select: { id: true, name: true } },
+        item: { select: { id: true, name: true } },
+      },
+    }),
+    db.repairObservation.findMany({
+      where: { walkthroughId },
+      include: { zone: { select: { id: true, name: true } } },
+    }),
+  ]);
+
+  return {
+    walkthroughId: wt.id,
+    spaceId: wt.spaceId,
+    status: wt.status,
+    storedDiff,
+    currentState: {
+      items: itemObs.map((o) => ({
+        id: o.id,
+        label: o.label,
+        status: o.status,
+        itemId: o.itemId,
+        itemName: o.item?.name ?? null,
+        zoneName: o.zone?.name ?? null,
+        storageLocationName: o.storageLocation?.name ?? null,
+        confidence: o.confidence,
+      })),
+      repairs: repairObs.map((r) => ({
+        id: r.id,
+        label: r.label,
+        status: r.status,
+        zoneName: r.zone?.name ?? null,
+        confidence: r.confidence,
+      })),
+    },
+  };
+}
+
 // ── Media Assets ───────────────────────────────────────────────────────────────
 
 export async function getMediaAsset(
@@ -465,6 +585,66 @@ export async function createMediaAsset(
       thumbnailUrl: params.thumbnailUrl || null,
     },
   });
+}
+
+// ── Item Aliases ──────────────────────────────────────────────────────────────
+
+export async function listAliases(
+  db: PrismaClient,
+  itemId: string,
+  tenantId: string,
+) {
+  return db.itemAlias.findMany({
+    where: { itemId, tenantId },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+}
+
+export async function createAlias(
+  db: PrismaClient,
+  params: { itemId: string; tenantId: string; alias: string; source?: string },
+) {
+  return db.itemAlias.create({
+    data: {
+      itemId: params.itemId,
+      tenantId: params.tenantId,
+      alias: params.alias.trim(),
+      source: params.source ?? "operator",
+    },
+  });
+}
+
+export async function deleteAlias(
+  db: PrismaClient,
+  aliasId: string,
+  itemId: string,
+  tenantId: string,
+) {
+  const alias = await db.itemAlias.findUnique({ where: { id: aliasId } });
+  if (!alias || alias.itemId !== itemId || alias.tenantId !== tenantId) return null;
+  await db.itemAlias.delete({ where: { id: aliasId } });
+  return alias;
+}
+
+/** Fetch all aliases for a set of items, grouped by itemId. */
+export async function getAliasesForItems(
+  db: PrismaClient,
+  itemIds: string[],
+  tenantId: string,
+): Promise<Map<string, string[]>> {
+  if (itemIds.length === 0) return new Map();
+  const rows = await db.itemAlias.findMany({
+    where: { itemId: { in: itemIds }, tenantId },
+    select: { itemId: true, alias: true },
+  });
+  const map = new Map<string, string[]>();
+  for (const row of rows) {
+    const aliases = map.get(row.itemId) ?? [];
+    aliases.push(row.alias);
+    map.set(row.itemId, aliases);
+  }
+  return map;
 }
 
 // ── Review ────────────────────────────────────────────────────────────────────
@@ -509,6 +689,11 @@ export async function getReviewTask(
       include: {
         zone: { select: { id: true, name: true } },
         storageLocation: { select: { id: true, name: true } },
+        identityLinks: {
+          include: {
+            item: { select: { id: true, name: true } },
+          },
+        },
       },
     }),
     db.repairObservation.findMany({

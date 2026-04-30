@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "../lib/db.js";
-import { requireTenant, sendApiError } from "../lib/errors.js";
+import { sendApiError } from "../lib/errors.js";
+import { createAuthMiddleware } from "../lib/auth.js";
 import {
   createSpace,
   getSpace,
@@ -12,6 +13,7 @@ import {
   searchItems,
   getItem,
   listRepairs,
+  getRepair,
   createRepair,
   updateRepairStatus,
   ingestObservations,
@@ -20,11 +22,16 @@ import {
   createStorageLocation,
   listStorageLocations,
   createMediaAsset,
+  getWalkthroughDiff,
+  listAliases,
+  createAlias,
+  deleteAlias,
 } from "../data.js";
+import { processBatch } from "../lib/processing-orchestrator.js";
 
 export const spacesRouter = Router();
 
-spacesRouter.use(requireTenant);
+spacesRouter.use(createAuthMiddleware());
 
 // ── Spaces ────────────────────────────────────────────────────────────────────
 
@@ -94,6 +101,58 @@ spacesRouter.get("/:id/walkthroughs", async (req, res) => {
   res.status(200).json(walkthroughs);
 });
 
+spacesRouter.get("/:id/walkthroughs/:walkthroughId", async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const wt = await getWalkthrough(db, req.params.walkthroughId, res.locals.tenantId);
+  if (!wt || wt.spaceId !== req.params.id) {
+    sendApiError(res, 404, "NOT_FOUND", "Walkthrough not found in this space");
+    return;
+  }
+
+  const mediaAssets = await db.mediaAsset.findMany({
+    where: { walkthroughId: wt.id, tenantId: res.locals.tenantId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const jobs = await db.processingJob.findMany({
+    where: { walkthroughId: wt.id },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+
+  const [itemObsCount, repairObsCount] = await Promise.all([
+    db.itemObservation.count({ where: { walkthroughId: wt.id } }),
+    db.repairObservation.count({ where: { walkthroughId: wt.id } }),
+  ]);
+
+  res.status(200).json({ ...wt, mediaAssets, jobs, itemObsCount, repairObsCount });
+});
+
+spacesRouter.get("/:id/walkthroughs/:walkthroughId/diff", async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const diff = await getWalkthroughDiff(
+    db,
+    req.params.walkthroughId,
+    res.locals.tenantId,
+  );
+  if (!diff || diff.spaceId !== req.params.id) {
+    sendApiError(res, 404, "NOT_FOUND", "Walkthrough not found in this space");
+    return;
+  }
+
+  res.status(200).json(diff);
+});
+
 spacesRouter.post("/:id/walkthroughs/:walkthroughId/process", async (req, res) => {
   void req.body;
   const result = await startProcessing(
@@ -105,7 +164,11 @@ spacesRouter.post("/:id/walkthroughs/:walkthroughId/process", async (req, res) =
     sendApiError(res, 404, "NOT_FOUND", "Walkthrough not found or not in uploaded state");
     return;
   }
-  res.status(200).json(result);
+
+  // Trigger processing pipeline
+  const procResult = await processBatch(db, res.locals.tenantId);
+
+  res.status(200).json({ ...result, processing: procResult });
 });
 
 // ── Inventory ─────────────────────────────────────────────────────────────────
@@ -142,6 +205,95 @@ spacesRouter.get("/:id/inventory/:itemId", async (req, res) => {
     return;
   }
   res.status(200).json(item);
+});
+
+// ── Item Aliases ──────────────────────────────────────────────────────────────
+
+spacesRouter.get("/:id/inventory/:itemId/aliases", async (req, res) => {
+  const item = await getItem(
+    db,
+    req.params.itemId,
+    req.params.id,
+    res.locals.tenantId,
+  );
+  if (!item) {
+    sendApiError(res, 404, "NOT_FOUND", "Item not found");
+    return;
+  }
+  const aliases = await listAliases(db, req.params.itemId, res.locals.tenantId);
+  res.status(200).json(aliases);
+});
+
+spacesRouter.post("/:id/inventory/:itemId/aliases", async (req, res) => {
+  const item = await getItem(
+    db,
+    req.params.itemId,
+    req.params.id,
+    res.locals.tenantId,
+  );
+  if (!item) {
+    sendApiError(res, 404, "NOT_FOUND", "Item not found");
+    return;
+  }
+
+  const alias = typeof req.body?.alias === "string" ? req.body.alias.trim() : "";
+  if (!alias) {
+    sendApiError(res, 400, "BAD_REQUEST", "alias is required");
+    return;
+  }
+
+  const source = typeof req.body?.source === "string" ? req.body.source : undefined;
+  if (source && !["operator", "system"].includes(source)) {
+    sendApiError(res, 400, "BAD_REQUEST", "source must be operator or system");
+    return;
+  }
+
+  try {
+    const created = await createAlias(db, {
+      itemId: req.params.itemId,
+      tenantId: res.locals.tenantId,
+      alias,
+      source,
+    });
+    res.status(201).json(created);
+  } catch (err: unknown) {
+    if (
+      err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as Record<string, unknown>).code === "P2002"
+    ) {
+      sendApiError(res, 409, "BAD_REQUEST", "Alias already exists for this item");
+      return;
+    }
+    throw err;
+  }
+});
+
+spacesRouter.delete("/:id/inventory/:itemId/aliases/:aliasId", async (req, res) => {
+  const item = await getItem(
+    db,
+    req.params.itemId,
+    req.params.id,
+    res.locals.tenantId,
+  );
+  if (!item) {
+    sendApiError(res, 404, "NOT_FOUND", "Item not found");
+    return;
+  }
+
+  const deleted = await deleteAlias(
+    db,
+    req.params.aliasId,
+    req.params.itemId,
+    res.locals.tenantId,
+  );
+  if (!deleted) {
+    sendApiError(res, 404, "NOT_FOUND", "Alias not found for this item");
+    return;
+  }
+
+  res.status(200).json({ deleted: true, id: deleted.id });
 });
 
 // ── Repairs ───────────────────────────────────────────────────────────────────
@@ -190,6 +342,20 @@ spacesRouter.post("/:id/repairs", async (req, res) => {
     itemId: typeof req.body?.itemId === "string" ? req.body.itemId : undefined,
   });
   res.status(201).json(repair);
+});
+
+spacesRouter.get("/:id/repairs/:issueId", async (req, res) => {
+  const repair = await getRepair(
+    db,
+    req.params.issueId,
+    req.params.id,
+    res.locals.tenantId,
+  );
+  if (!repair) {
+    sendApiError(res, 404, "NOT_FOUND", "Repair issue not found");
+    return;
+  }
+  res.status(200).json(repair);
 });
 
 spacesRouter.patch("/:id/repairs/:issueId", async (req, res) => {
