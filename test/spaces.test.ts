@@ -2599,3 +2599,233 @@ test("POST /api/spaces/:id/observations rejects non-existent walkthrough", async
     await db.$disconnect();
   }
 });
+
+// ── Review Action Coverage ─────────────────────────────────────────────────
+
+test("relabel action changes observation label", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+
+    const ingRes = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        walkthroughId: wt.id,
+        items: [{ label: "misspeled", confidence: 0.7 }],
+      }),
+    });
+    const ing = (await ingRes.json()) as { reviewTask: { id: string }; itemObservations: Array<{ id: string }> };
+
+    const res = await fetch(url(address.port, `/api/review/${ing.reviewTask.id}/actions`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ actionType: "relabel", observationId: ing.itemObservations[0].id, newLabel: "corrected" }),
+    });
+    assert.equal(res.status, 201);
+
+    const taskRes = await fetch(url(address.port, `/api/review/queue/${ing.reviewTask.id}`), {
+      headers: headers("tenant-a"),
+    });
+    const task = (await taskRes.json()) as { itemObservations: Array<{ label: string }> };
+    assert.equal(task.itemObservations[0].label, "corrected");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("merge into existing item links observation without creating new item", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+
+    const wt1 = await createTestWalkthrough(address.port, space.id);
+    const ing1 = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ walkthroughId: wt1.id, items: [{ label: "dup_item", confidence: 0.8 }] }),
+    });
+    const i1 = (await ing1.json()) as { reviewTask: { id: string }; itemObservations: Array<{ id: string }> };
+    await fetch(url(address.port, `/api/review/${i1.reviewTask.id}/actions`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ actionType: "accept", observationId: i1.itemObservations[0].id }),
+    });
+
+    const inv = await fetch(url(address.port, `/api/spaces/${space.id}/inventory`), {
+      headers: headers("tenant-a"),
+    });
+    const items = (await inv.json()) as Array<{ id: string; name: string }>;
+    assert.equal(items.length, 1);
+    const existingItemId = items[0].id;
+
+    const wt2 = await createTestWalkthrough(address.port, space.id);
+    const ing2 = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ walkthroughId: wt2.id, items: [{ label: "dup_item_v2", confidence: 0.85 }] }),
+    });
+    const i2 = (await ing2.json()) as { reviewTask: { id: string }; itemObservations: Array<{ id: string }> };
+
+    const mergeRes = await fetch(url(address.port, `/api/review/${i2.reviewTask.id}/actions`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ actionType: "merge", observationId: i2.itemObservations[0].id, itemId: existingItemId }),
+    });
+    assert.equal(mergeRes.status, 201);
+
+    const invAfter = await fetch(url(address.port, `/api/spaces/${space.id}/inventory`), {
+      headers: headers("tenant-a"),
+    });
+    const itemsAfter = (await invAfter.json()) as Array<{ id: string }>;
+    assert.equal(itemsAfter.length, 1);
+
+    const detailRes = await fetch(url(address.port, `/api/spaces/${space.id}/inventory/${existingItemId}`), {
+      headers: headers("tenant-a"),
+    });
+    const detail = (await detailRes.json()) as { identityLinks: Array<unknown> };
+    assert.equal(detail.identityLinks.length, 2);
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("repair observation appears in review task detail", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+
+    const ingRes = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        walkthroughId: wt.id,
+        repairs: [{ label: "broken_window", confidence: 0.92 }],
+      }),
+    });
+    const ing = (await ingRes.json()) as { reviewTask: { id: string }; repairObservations: Array<{ id: string; label: string }> };
+    assert.equal(ing.repairObservations.length, 1);
+    assert.equal(ing.repairObservations[0].label, "broken_window");
+
+    const taskRes = await fetch(url(address.port, `/api/review/queue/${ing.reviewTask.id}`), {
+      headers: headers("tenant-a"),
+    });
+    const task = (await taskRes.json()) as { repairObservations: Array<{ label: string }> };
+    assert.equal(task.repairObservations.length, 1);
+    assert.equal(task.repairObservations[0].label, "broken_window");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("review action with note is recorded", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+
+    const ingRes = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ walkthroughId: wt.id, items: [{ label: "noted_item", confidence: 0.6 }] }),
+    });
+    const ing = (await ingRes.json()) as { reviewTask: { id: string }; itemObservations: Array<{ id: string }> };
+
+    const res = await fetch(url(address.port, `/api/review/${ing.reviewTask.id}/actions`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({
+        actionType: "accept",
+        observationId: ing.itemObservations[0].id,
+        note: "Looks like a genuine find",
+      }),
+    });
+    assert.equal(res.status, 201);
+    const action = (await res.json()) as { note: string; actionType: string };
+    assert.equal(action.note, "Looks like a genuine find");
+    assert.equal(action.actionType, "accept");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
+
+test("walkthrough status transitions: uploaded → processing → awaiting_review → applied", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wt = await createTestWalkthrough(address.port, space.id);
+    assert.equal(wt.status, "uploaded");
+
+    // uploaded → processing
+    const procRes = await fetch(
+      url(address.port, `/api/spaces/${space.id}/walkthroughs/${wt.id}/process`),
+      { method: "POST", headers: headers("tenant-a") },
+    );
+    const procWt = (await procRes.json()) as { status: string };
+    assert.equal(procWt.status, "processing");
+
+    // processing + ingest → awaiting_review
+    const ingRes = await fetch(url(address.port, `/api/spaces/${space.id}/observations`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ walkthroughId: wt.id, items: [{ label: "state_test", confidence: 0.9 }] }),
+    });
+    const ing = (await ingRes.json()) as { reviewTask: { id: string }; itemObservations: Array<{ id: string }> };
+    const wtsAfterIngest = await fetch(url(address.port, `/api/spaces/${space.id}/walkthroughs`), {
+      headers: headers("tenant-a"),
+    });
+    const wtsAI = (await wtsAfterIngest.json()) as Array<{ id: string; status: string }>;
+    assert.equal(wtsAI.find((w) => w.id === wt.id)!.status, "awaiting_review");
+
+    // accept → applied
+    await fetch(url(address.port, `/api/review/${ing.reviewTask.id}/actions`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ actionType: "accept", observationId: ing.itemObservations[0].id }),
+    });
+    const wtsFinal = await fetch(url(address.port, `/api/spaces/${space.id}/walkthroughs`), {
+      headers: headers("tenant-a"),
+    });
+    const wtsF = (await wtsFinal.json()) as Array<{ id: string; status: string }>;
+    assert.equal(wtsF.find((w) => w.id === wt.id)!.status, "applied");
+  } finally {
+    server.close();
+    await db.$disconnect();
+  }
+});
