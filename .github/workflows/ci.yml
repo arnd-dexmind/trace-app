@@ -125,9 +125,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate database secret
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::STAGING_DATABASE_URL secret is not configured."
+            echo "Add it in: Settings → Environments → staging → Environment secrets"
+            exit 1
+          fi
+          echo "DATABASE_URL is set (length: ${#DATABASE_URL})"
+
       - name: Apply migrations
         run: |
-          # Derive direct (non-pooled) URL for migrations (Neon PgBouncer compatibility)
           DIRECT_URL=$(echo "$DATABASE_URL" | sed -e 's/-pooler//' -e 's/[?&]pgbouncer=true//')
           DATABASE_URL="$DIRECT_URL" npx prisma migrate deploy
 
