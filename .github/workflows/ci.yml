@@ -107,10 +107,6 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: staging
-    env:
-      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
-      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
 
     steps:
       - name: Checkout
@@ -125,19 +121,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate database secret
-        run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::error::STAGING_DATABASE_URL secret is not configured."
-            echo "Add it in: Settings → Environments → staging → Environment secrets"
-            exit 1
-          fi
-          echo "DATABASE_URL is set (length: ${#DATABASE_URL})"
-
-      - name: Apply migrations
-        run: |
-          DIRECT_URL=$(echo "$DATABASE_URL" | sed -e 's/-pooler//' -e 's/[?&]pgbouncer=true//')
-          DATABASE_URL="$DIRECT_URL" npx prisma migrate deploy
+      # Migrations now run as part of Vercel's buildCommand (see vercel.json),
+      # using DATABASE_URL_UNPOOLED for the direct connection. CI no longer
+      # needs to migrate first — Vercel build is the single source of truth.
 
       - name: Deploy to Vercel (staging)
         env:
@@ -171,23 +157,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate database secret
-        run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::error::PRODUCTION_DATABASE_URL secret is not configured."
-            echo "Add it in: Settings → Environments → production → Environment secrets"
-            exit 1
-          fi
-          echo "DATABASE_URL is set (length: ${#DATABASE_URL})"
-        env:
-          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
-
-      - name: Apply migrations
-        run: |
-          DIRECT_URL=$(echo "$DATABASE_URL" | sed -e 's/-pooler//' -e 's/[?&]pgbouncer=true//')
-          DATABASE_URL="$DIRECT_URL" npx prisma migrate deploy
-        env:
-          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      # Migrations now run as part of Vercel's buildCommand (see vercel.json),
+      # using DATABASE_URL_UNPOOLED for the direct connection. CI no longer
+      # needs to migrate first — Vercel build is the single source of truth.
 
       - name: Deploy to Vercel (production)
         env:
