@@ -188,7 +188,7 @@ export function Capture() {
             <div key={entry.id} style={fileCardStyle(entry.status)}>
               {/* Thumbnail */}
               {entry.previewUrl ? (
-                <img src={entry.previewUrl} alt="" style={thumbnailStyle} />
+                <img src={entry.previewUrl} alt={`Preview of ${entry.file.name}`} style={thumbnailStyle} />
               ) : (
                 <div style={videoPlaceholderStyle}>&#127910;</div>
               )}

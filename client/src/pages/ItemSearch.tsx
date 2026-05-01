@@ -359,7 +359,7 @@ const searchInput: React.CSSProperties = {
   width: "100%", font: "inherit", fontSize: "var(--sm-text-lg)",
   padding: "var(--sm-space-3) var(--sm-space-4)", paddingLeft: 48,
   border: "2px solid var(--sm-border-default)", borderRadius: "var(--sm-radius-lg)",
-  background: "var(--sm-surface-card)", color: "var(--sm-text-primary)", outline: "none", boxSizing: "border-box",
+  background: "var(--sm-surface-card)", color: "var(--sm-text-primary)", boxSizing: "border-box",
 };
 
 const searchIcon: React.CSSProperties = {
@@ -445,7 +445,6 @@ const selectStyle: React.CSSProperties = {
   padding: "var(--sm-space-1) var(--sm-space-3)",
   border: "1px solid var(--sm-border-default)", borderRadius: "var(--sm-radius-md)",
   background: "var(--sm-surface-card)", color: "var(--sm-text-primary)",
-  outline: "none",
 };
 
 const orderBtnStyle: React.CSSProperties = {
@@ -505,7 +504,7 @@ const numberInputStyle: React.CSSProperties = {
   width: 70, font: "inherit", fontSize: "var(--sm-text-sm)",
   padding: "var(--sm-space-1) var(--sm-space-2)",
   border: "1px solid var(--sm-border-default)", borderRadius: "var(--sm-radius-md)",
-  background: "var(--sm-surface-card)", color: "var(--sm-text-primary)", outline: "none",
+  background: "var(--sm-surface-card)", color: "var(--sm-text-primary)",
 };
 
 const loadingBar: React.CSSProperties = {

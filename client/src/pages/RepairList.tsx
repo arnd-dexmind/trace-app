@@ -500,7 +500,6 @@ const input: React.CSSProperties = {
   borderRadius: "var(--sm-radius-md)",
   background: "var(--sm-surface-page)",
   color: "var(--sm-text-primary)",
-  outline: "none",
 };
 
 const modalFooter: React.CSSProperties = {

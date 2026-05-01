@@ -530,11 +530,13 @@ function DetailView({
                   style={navBtnStyle}
                   disabled={selectedObsIndex === 0}
                   onClick={() => setSelectedObsIndex(Math.max(0, selectedObsIndex - 1))}
+                  aria-label="Previous observation"
                 >&#8592;</button>
                 <button
                   style={navBtnStyle}
                   disabled={selectedObsIndex >= observations.length - 1}
                   onClick={() => setSelectedObsIndex(Math.min(observations.length - 1, selectedObsIndex + 1))}
+                  aria-label="Next observation"
                 >&#8594;</button>
               </div>
             </div>
@@ -633,7 +635,7 @@ function DetailView({
                     >
                       <div style={thumbFrameStyle}>
                         {obs.keyframeUrl ? (
-                          <img src={obs.keyframeUrl} alt="" style={thumbImgStyle} />
+                          <img src={obs.keyframeUrl} alt={obs.label || "Observation keyframe"} style={thumbImgStyle} />
                         ) : (
                           <span style={{ fontSize: 10, color: "var(--sm-text-tertiary)" }}>No frame</span>
                         )}
@@ -1384,7 +1386,6 @@ const relabelInputStyle: React.CSSProperties = {
   borderRadius: "var(--sm-radius-md)",
   background: "var(--sm-surface-card)",
   color: "var(--sm-text-primary)",
-  outline: "none",
   maxWidth: 280,
 };
 

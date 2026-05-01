@@ -471,7 +471,7 @@ function ResultCard({ item, isSelected, isFocused, isNarrow, onToggleSelect, wal
       {/* Thumbnail */}
       <div style={thumbStyle(isNarrow)}>
         {item.keyframeUrl ? (
-          <img src={item.keyframeUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={item.keyframeUrl} alt={`Keyframe for ${item.label}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           <span style={{ fontSize: 28 }}>{item.resultStatus === "missing" ? "&#10060;" : "&#128218;"}</span>
         )}

@@ -290,7 +290,6 @@ const textInput: React.CSSProperties = {
   borderRadius: "var(--sm-radius-md)",
   background: "var(--sm-surface-card)",
   color: "var(--sm-text-primary)",
-  outline: "none",
 };
 
 const formActions: React.CSSProperties = {
