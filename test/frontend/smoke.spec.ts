@@ -282,11 +282,9 @@ test("results page renders with empty state when no observations exist", async (
   await page.goto(`/results/${walkthrough.id}`);
   await page.waitForLoadState("networkidle");
 
-  // Should show breadcrumb and header
-  await expect(page.getByText("Walkthrough Results")).toBeVisible();
-
-  // Empty state — no items detected
-  await expect(page.getByText("No Items Detected")).toBeVisible();
+  // Empty state — breadcrumb and heading now rendered for navigation context
+  await expect(page.getByRole("heading", { name: "Walkthrough Results" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No Items Detected" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Upload Another Walkthrough" })).toBeVisible();
 });
 
@@ -319,8 +317,8 @@ test("results page renders stats grid and item cards with observations", async (
 
   // Stats grid should be visible with summary counts
   await expect(page.getByText("Total Items")).toBeVisible();
-  await expect(page.getByText("New")).toBeVisible();
-  await expect(page.getByText("Matched")).toBeVisible();
+  await expect(page.getByRole("button", { name: "New:" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Matched:" })).toBeVisible();
 
   // Item cards should appear
   await expect(page.getByText("Binder - Blue 3-Ring")).toBeVisible();
@@ -410,11 +408,198 @@ test("results page renders on mobile viewport", async ({ page }) => {
   await page.waitForLoadState("networkidle");
 
   // Header and breadcrumb should still be visible
-  await expect(page.getByText("Walkthrough Results")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Walkthrough Results" })).toBeVisible();
 
   // Item card should be visible
   await expect(page.getByText("Mobile Test Item")).toBeVisible();
 
   // Nav should be reachable
   await expect(page.getByRole("link", { name: "Capture" })).toBeVisible();
+});
+
+// ── Item Detail/Edit View ────────────────────────────────────────────────────
+
+test("item detail page renders view mode with keyframe, info grid, and action bar", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  // Create walkthrough + observation
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  const obsRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [{ label: "Binder - Blue 3-Ring", confidence: 72 }],
+    },
+  });
+  if (!obsRes.ok()) return;
+  const obsData = await obsRes.json();
+  const itemId = obsData.items?.[0]?.id;
+  if (!itemId) return;
+
+  await page.goto(`/results/${walkthrough.id}/items/${itemId}`);
+  await page.waitForLoadState("networkidle");
+
+  // Breadcrumb
+  await expect(page.getByText("Binder - Blue 3-Ring")).toBeVisible();
+
+  // Action bar buttons
+  await expect(page.getByRole("button", { name: /Accept/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Edit/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Reject/i })).toBeVisible();
+
+  // Keyframe viewer present
+  await expect(page.getByText(/Observation/)).toBeVisible();
+
+  // AI callout visible
+  await expect(page.getByText("AI Detection Summary")).toBeVisible();
+
+  // Info grid with category, confidence, etc.
+  await expect(page.getByText("Category")).toBeVisible();
+  await expect(page.getByText("AI Confidence")).toBeVisible();
+  await expect(page.getByText("Zone")).toBeVisible();
+
+  // Location card
+  await expect(page.getByText("Detected Location")).toBeVisible();
+
+  // Prev/Next navigation
+  await expect(page.getByText(/Item 1 of 1/)).toBeVisible();
+
+  // Keyboard hints
+  await expect(page.getByText("accept")).toBeVisible();
+});
+
+test("item detail page edit mode reveals form with suggested labels", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  // Create two observations so suggested labels appear
+  const obsRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [
+        { label: "Binder - Blue 3-Ring", confidence: 72 },
+        { label: "Ring Binder - 3-Ring", confidence: 58 },
+        { label: "Document Binder - Blue", confidence: 45 },
+      ],
+    },
+  });
+  if (!obsRes.ok()) return;
+  const obsData = await obsRes.json();
+  const itemId = obsData.items?.[0]?.id;
+  if (!itemId) return;
+
+  await page.goto(`/results/${walkthrough.id}/items/${itemId}`);
+  await page.waitForLoadState("networkidle");
+
+  // Click Edit
+  await page.getByRole("button", { name: /Edit/i }).click();
+
+  // Suggested labels should appear
+  await expect(page.getByText("Suggested Labels")).toBeVisible();
+  await expect(page.getByText("Ring Binder - 3-Ring")).toBeVisible();
+  await expect(page.getByText("Document Binder - Blue")).toBeVisible();
+
+  // Form fields visible
+  await expect(page.locator("#edit-name")).toBeVisible();
+  await expect(page.locator("#edit-category")).toBeVisible();
+  await expect(page.locator("#edit-zone")).toBeVisible();
+
+  // Cancel and Save buttons
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save Changes" })).toBeVisible();
+});
+
+test("item detail page accept and reject flows work", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  const obsRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [{ label: "Test Accept Item", confidence: 85 }],
+    },
+  });
+  if (!obsRes.ok()) return;
+  const obsData = await obsRes.json();
+  const itemId = obsData.items?.[0]?.id;
+  if (!itemId) return;
+
+  await page.goto(`/results/${walkthrough.id}/items/${itemId}`);
+  await page.waitForLoadState("networkidle");
+
+  // Click Accept
+  await page.getByRole("button", { name: /Accept/i }).click();
+  await page.waitForTimeout(500);
+
+  // Toast should appear
+  await expect(page.getByText("Item accepted")).toBeVisible();
+});
+
+test("item detail page renders at breakpoints", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  const obsRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [{ label: "Breakpoint Test Item", confidence: 80 }],
+    },
+  });
+  if (!obsRes.ok()) return;
+  const obsData = await obsRes.json();
+  const itemId = obsData.items?.[0]?.id;
+  if (!itemId) return;
+
+  // 375px (mobile)
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/results/${walkthrough.id}/items/${itemId}`);
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByText("Breakpoint Test Item")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Accept/i })).toBeVisible();
+
+  // 768px (tablet)
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto(`/results/${walkthrough.id}/items/${itemId}`);
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByText("Breakpoint Test Item")).toBeVisible();
+  await expect(page.getByText("Detected Location")).toBeVisible();
+});
+
+test("item detail shows not-found state for nonexistent item", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  // Use a made-up walkthrough + item ID
+  await page.goto("/results/nonexistent-wt/items/nonexistent-item");
+  await page.waitForLoadState("networkidle");
+
+  await expect(page.getByText("Item Not Found")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Back to Results" })).toBeVisible();
 });

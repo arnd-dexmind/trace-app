@@ -166,7 +166,7 @@ export function Results() {
       } else if (e.key === "Enter" && focusedIdx >= 0 && focusedIdx < cards.length) {
         e.preventDefault();
         const item = cards[focusedIdx];
-        window.location.href = `/items/${item.itemId || item.id}`;
+        window.location.href = `/results/${walkthroughId}/items/${item.id}`;
       } else if (e.key === "a" && !e.shiftKey && focusedIdx >= 0 && focusedIdx < cards.length) {
         e.preventDefault();
         toggleSelect(cards[focusedIdx].id);
@@ -180,7 +180,7 @@ export function Results() {
       } else if (e.key === "e" && focusedIdx >= 0 && focusedIdx < cards.length) {
         e.preventDefault();
         const item = cards[focusedIdx];
-        window.location.href = `/items/${item.itemId || item.id}`;
+        window.location.href = `/results/${walkthroughId}/items/${item.id}`;
       } else if (e.key === "Escape") {
         clearSelection();
       }
@@ -231,6 +231,21 @@ export function Results() {
   if (pageState === "empty" || !data) {
     return (
       <div style={shell}>
+        {/* Breadcrumb */}
+        <nav style={breadcrumbStyle} aria-label="Breadcrumb">
+          <Link to="/upload" style={breadcrumbLinkStyle}>Upload</Link>
+          <span style={{ color: "var(--sm-text-tertiary)" }}>&#8250;</span>
+          <span style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)" }}>Walkthrough Results</span>
+        </nav>
+
+        {/* Page Header */}
+        <div style={pageHeaderStyle(false)}>
+          <div>
+            <h1 style={titleStyle(false)}>Walkthrough Results</h1>
+            <p style={subtitleStyle}>0 items detected</p>
+          </div>
+        </div>
+
         <div style={emptyStateStyle}>
           <div style={{ fontSize: 48, marginBottom: "var(--sm-space-4)" }}>&#128270;</div>
           <h3 style={{ fontSize: "var(--sm-text-lg)", marginBottom: "var(--sm-space-2)" }}>No Items Detected</h3>
@@ -351,6 +366,7 @@ export function Results() {
             isFocused={idx === focusedIdx}
             isNarrow={isNarrow}
             onToggleSelect={() => toggleSelect(item.id)}
+            walkthroughId={walkthroughId!}
           />
         ))}
       </div>
@@ -420,12 +436,13 @@ function FilterPill({ label, value, active, onClick }: {
   );
 }
 
-function ResultCard({ item, isSelected, isFocused, isNarrow, onToggleSelect }: {
+function ResultCard({ item, isSelected, isFocused, isNarrow, onToggleSelect, walkthroughId }: {
   item: WalkthroughResultItem;
   isSelected: boolean;
   isFocused: boolean;
   isNarrow: boolean;
   onToggleSelect: () => void;
+  walkthroughId: string;
 }) {
   const confClass = classifyConfidence(item.confidence);
 
@@ -447,7 +464,7 @@ function ResultCard({ item, isSelected, isFocused, isNarrow, onToggleSelect }: {
       aria-label={`${item.label} - ${statusLabel(item.resultStatus)} - ${item.confidence !== null ? `${Math.round(item.confidence)}%` : "N/A"}`}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
-          window.location.href = `/items/${item.itemId || item.id}`;
+          window.location.href = `/results/${walkthroughId}/items/${item.id}`;
         }
       }}
     >
@@ -492,7 +509,7 @@ function ResultCard({ item, isSelected, isFocused, isNarrow, onToggleSelect }: {
         </Button>
         <Button variant="ghost" size="sm" onClick={(e) => {
           e.stopPropagation();
-          window.location.href = `/items/${item.itemId || item.id}`;
+          window.location.href = `/results/${walkthroughId}/items/${item.id}`;
         }}>
           &#9998;
         </Button>
