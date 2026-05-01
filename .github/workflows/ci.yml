@@ -129,12 +129,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Reset the Marketplace-created preview/staging Neon branch from its parent
-      # (production main) so each staging push tests migrations against the *current*
-      # production schema/data. Branch is auto-created by Marketplace on first push;
-      # we look it up by name and reset it. Vercel's buildCommand then runs
-      # `prisma migrate deploy` against the freshly-reset branch.
-      - name: Reset preview/staging Neon branch from main
+      # Reset the staging Neon branch from its parent (production main) so each
+      # staging push tests migrations against the *current* production schema/data.
+      # Marketplace may create either `staging` (matches the git branch) or
+      # `preview/staging` (its standard preview-branch convention), so look for
+      # both. Vercel's buildCommand runs `prisma migrate deploy` against the
+      # freshly-reset branch.
+      - name: Reset staging Neon branch from main
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
@@ -146,15 +147,17 @@ jobs:
             | python3 -c "
           import json,sys,re
           raw=re.sub(r'[\x00-\x08\x0b-\x1f]', '', sys.stdin.read())
-          for b in json.loads(raw)['branches']:
-              if b['name'] == 'preview/staging':
-                  print(b['id']); break
+          for name in ('preview/staging', 'staging'):
+              for b in json.loads(raw)['branches']:
+                  if b['name'] == name:
+                      print(b['id'])
+                      sys.exit(0)
           ")
           if [ -z "$BRANCH_ID" ]; then
-            echo "::warning::preview/staging Neon branch not found yet (Marketplace creates it on first deploy). Skipping reset."
+            echo "::warning::No staging or preview/staging Neon branch found yet (Marketplace creates it on first deploy). Skipping reset."
             exit 0
           fi
-          echo "Resetting preview/staging branch ($BRANCH_ID) from parent..."
+          echo "Resetting staging branch ($BRANCH_ID) from parent..."
           curl -fsSL -X POST \
             "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${BRANCH_ID}/reset_to_parent" \
             -H "Authorization: Bearer ${NEON_API_KEY}" \
@@ -181,10 +184,17 @@ jobs:
         run: npx vercel@latest deploy --token "$VERCEL_TOKEN" --yes
 
       - name: Smoke test
+        env:
+          BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           sleep 5
-          curl -f -s -o /dev/null ${{ secrets.STAGING_URL }}/api/health || \
-            (sleep 10 && curl -f -s -o /dev/null ${{ secrets.STAGING_URL }}/api/health)
+          # staging.app.perifeye.com is preview-aliased so it sits behind Vercel's
+          # SSO Deployment Protection — pass the bypass token via header.
+          curl -f -s -o /dev/null -H "x-vercel-protection-bypass: $BYPASS" \
+            ${{ secrets.STAGING_URL }}/api/health || \
+            (sleep 10 && curl -f -s -o /dev/null \
+              -H "x-vercel-protection-bypass: $BYPASS" \
+              ${{ secrets.STAGING_URL }}/api/health)
 
   deploy-production:
     needs: [quality, frontend]
