@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { extname, join } from "node:path";
-import { mkdirSync, createReadStream } from "node:fs";
-import { readFile, unlink } from "node:fs/promises";
+import { mkdirSync } from "node:fs";
+import { unlink } from "node:fs/promises";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl as s3GetSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -125,7 +125,7 @@ class S3StorageProvider implements StorageProvider {
     return s3GetSignedUrl(this.client, command, { expiresIn: params.expiresInSec ?? 300 });
   }
 
-  async getSignedReadUrl(key: string, expiresInSec?: number): Promise<string> {
+  async getSignedReadUrl(key: string, _expiresInSec?: number): Promise<string> {
     return `${this.publicUrlBase}/${key}`;
   }
 

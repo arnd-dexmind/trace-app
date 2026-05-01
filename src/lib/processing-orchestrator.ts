@@ -16,7 +16,7 @@ export async function processNextJob(
   try {
     await executeStage(db, job.walkthroughId, job.tenantId, job.stage);
 
-    const { nextStage } = await completeJob(db, job.id);
+    await completeJob(db, job.id);
 
     if (isLastStage(job.stage as Parameters<typeof isLastStage>[0])) {
       await finalizePipeline(db, job.walkthroughId, job.tenantId);

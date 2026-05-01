@@ -23,6 +23,7 @@ export default [
     },
     rules: {
       "no-undef": "off",
+      "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [
         "error",
         {
@@ -33,6 +34,6 @@ export default [
     }
   },
   {
-    ignores: ["dist/**", "client/dist/**", "node_modules/**"]
+    ignores: ["dist/**", "client/dist/**", "client/client/**", "brand/**", "node_modules/**"]
   }
 ];

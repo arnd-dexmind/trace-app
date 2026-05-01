@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import { enqueuePipeline, getJobs as getJobsQueue, getProcessingMetrics as getMetricsQueue } from "./lib/job-queue.js";
+import { enqueuePipeline } from "./lib/job-queue.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -322,7 +322,7 @@ export async function searchItems(
     const take = Math.min(limit && limit > 0 ? limit : DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE) + 1;
 
     // Full-text search with ts_rank for ranking — pagination via LIMIT/OFFSET
-    const offset = cursor ? 1 : 0; // simplified: cursor not supported for FTS
+    const _offset = cursor ? 1 : 0; // simplified: cursor not supported for FTS
     items = await db.$queryRaw`
       SELECT i.*, ts_rank(i."searchVector", plainto_tsquery('english', ${query})) AS rank
       FROM "InventoryItem" i

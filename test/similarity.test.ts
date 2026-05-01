@@ -160,7 +160,7 @@ test("stringSimilarity — returns rounded value", () => {
 
 test("createAliasAwareEngine — exact alias match returns 1", () => {
   const aliases = new Map([["item-1", ["makita drill", "blue drill"]]]);
-  const base = { nameSimilarity: (a: string, b: string) => 0.5 };
+  const base = { nameSimilarity: (_a: string, _b: string) => 0.5 };
   const engine = createAliasAwareEngine(base, aliases);
 
   const score = engine.nameSimilarity("makita drill", "power drill", "item-1");
