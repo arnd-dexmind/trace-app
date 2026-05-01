@@ -349,12 +349,19 @@ async function finalizePipeline(
   tenantId: string,
 ) {
   // Check if all observations are already processed (auto-applied by diff engine)
-  const pendingCount = await db.itemObservation.count({
-    where: { walkthroughId, status: "pending" },
-  });
+  const [pendingCount, totalCount] = await Promise.all([
+    db.itemObservation.count({ where: { walkthroughId, status: "pending" } }),
+    db.itemObservation.count({ where: { walkthroughId } }),
+  ]);
 
+  // If no observations exist yet, skip finalization — keep the walkthrough
+  // in "processing" so observations can still be ingested.
+  if (totalCount === 0) {
+    return;
+  }
+
+  // All observations have been processed — auto-apply and skip review
   if (pendingCount === 0) {
-    // All observations auto-applied — complete any existing review task and skip review
     await db.reviewTask.updateMany({
       where: { walkthroughId, status: "pending" },
       data: { status: "completed" },

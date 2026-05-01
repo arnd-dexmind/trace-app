@@ -321,14 +321,21 @@ export async function searchItems(
     const query = params.name.trim();
     const take = Math.min(limit && limit > 0 ? limit : DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE) + 1;
 
+    // Build prefix-aware tsquery: each word gets :* for prefix matching
+    const prefixQuery = query
+      .split(/\s+/)
+      .map((w) => `${w}:*`)
+      .join(" & ");
+
     // Full-text search with ts_rank for ranking — pagination via LIMIT/OFFSET
     const _offset = cursor ? 1 : 0; // simplified: cursor not supported for FTS
     items = await db.$queryRaw`
-      SELECT i.*, ts_rank(i."searchVector", plainto_tsquery('english', ${query})) AS rank
+      SELECT i.id, i."spaceId", i."tenantId", i.name, i.category, i.description, i.quantity, i."createdAt", i."updatedAt",
+             ts_rank(i."searchVector", to_tsquery('english', ${prefixQuery})) AS rank
       FROM "InventoryItem" i
       WHERE i."spaceId" = ${params.spaceId}
         AND i."tenantId" = ${params.tenantId}
-        AND i."searchVector" @@ plainto_tsquery('english', ${query})
+        AND i."searchVector" @@ to_tsquery('english', ${prefixQuery})
       ORDER BY rank DESC
       LIMIT ${take}
     `;
