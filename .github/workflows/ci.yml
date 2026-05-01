@@ -126,7 +126,10 @@ jobs:
         run: npm ci
 
       - name: Apply migrations
-        run: npx prisma migrate deploy
+        run: |
+          # Derive direct (non-pooled) URL for migrations (Neon PgBouncer compatibility)
+          DIRECT_URL=$(echo "$DATABASE_URL" | sed -e 's/-pooler//' -e 's/[?&]pgbouncer=true//')
+          DATABASE_URL="$DIRECT_URL" npx prisma migrate deploy
 
       - name: Deploy to Vercel (staging)
         uses: amondnet/vercel-action@v25
@@ -162,7 +165,9 @@ jobs:
         run: npm ci
 
       - name: Apply migrations
-        run: npx prisma migrate deploy
+        run: |
+          DIRECT_URL=$(echo "$DATABASE_URL" | sed -e 's/-pooler//' -e 's/[?&]pgbouncer=true//')
+          DATABASE_URL="$DIRECT_URL" npx prisma migrate deploy
         env:
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
 
