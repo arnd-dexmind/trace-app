@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { db } from "../src/lib/db.js";
 import { createApp } from "../src/app.js";
 import { cleanDatabase } from "./_helpers.js";
 
