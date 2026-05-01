@@ -61,6 +61,7 @@ async function cleanDatabase() {
 // ── Space CRUD ────────────────────────────────────────────────────────────────
 
 test("POST /api/spaces creates a space", async () => {
+  await cleanDatabase();
   const app = createApp();
   const server = app.listen(0);
 
