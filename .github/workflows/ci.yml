@@ -130,7 +130,10 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: npx vercel@latest deploy --prod --token "$VERCEL_TOKEN" --yes
+        # No --prod: main is no longer the production branch (productionBranch=release).
+        # This deploys as a Preview, which Vercel auto-aliases to staging.app.perifeye.com
+        # (the domain bound to gitBranch=main in the trace-app project).
+        run: npx vercel@latest deploy --token "$VERCEL_TOKEN" --yes
 
       - name: Smoke test
         run: |
