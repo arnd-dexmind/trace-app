@@ -102,9 +102,16 @@ jobs:
       - name: Frontend smoke tests
         run: npm run test:frontend
 
+  # Workflow model:
+  #   PR → preview deploy with Marketplace-managed per-PR Neon branch
+  #   merge to staging → deploy-staging job → resets preview/staging Neon branch
+  #     from main, deploys to staging.app.perifeye.com
+  #   release PR (staging → main) → deploy-production job → deploys to
+  #     app.perifeye.com (Vercel build runs migrations against production main)
+
   deploy-staging:
     needs: [quality, frontend]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
     environment: staging
 
@@ -121,33 +128,46 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Reset the long-lived staging Neon branch from its parent (main) so each
-      # main push tests migrations against the *current* production schema/data.
-      # The branch endpoint stays stable; only the data is replaced.
-      # Vercel's buildCommand then runs `prisma migrate deploy` against this
-      # freshly-reset branch.
-      - name: Reset staging Neon branch from main
+      # Reset the Marketplace-created preview/staging Neon branch from its parent
+      # (production main) so each staging push tests migrations against the *current*
+      # production schema/data. Branch is auto-created by Marketplace on first push;
+      # we look it up by name and reset it. Vercel's buildCommand then runs
+      # `prisma migrate deploy` against the freshly-reset branch.
+      - name: Reset preview/staging Neon branch from main
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
-          NEON_STAGING_BRANCH_ID: ${{ secrets.NEON_STAGING_BRANCH_ID }}
         run: |
           set -e
-          echo "Resetting staging branch from parent..."
+          BRANCH_ID=$(curl -fsSL \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            | python3 -c "
+          import json,sys,re
+          raw=re.sub(r'[\x00-\x08\x0b-\x1f]', '', sys.stdin.read())
+          for b in json.loads(raw)['branches']:
+              if b['name'] == 'preview/staging':
+                  print(b['id']); break
+          ")
+          if [ -z "$BRANCH_ID" ]; then
+            echo "::warning::preview/staging Neon branch not found yet (Marketplace creates it on first deploy). Skipping reset."
+            exit 0
+          fi
+          echo "Resetting preview/staging branch ($BRANCH_ID) from parent..."
           curl -fsSL -X POST \
-            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_STAGING_BRANCH_ID}/reset_to_parent" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${BRANCH_ID}/reset_to_parent" \
             -H "Authorization: Bearer ${NEON_API_KEY}" \
             -H "Content-Type: application/json" > /dev/null
           for i in $(seq 1 30); do
             state=$(curl -fsSL \
-              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_STAGING_BRANCH_ID}" \
+              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${BRANCH_ID}" \
               -H "Authorization: Bearer ${NEON_API_KEY}" \
-              | python3 -c "import json,sys; print(json.load(sys.stdin)['branch']['current_state'])")
+              | python3 -c "import json,sys,re; print(json.loads(re.sub(r'[\x00-\x08\x0b-\x1f]','',sys.stdin.read()))['branch']['current_state'])")
             echo "  attempt $i: state=$state"
             [ "$state" = "ready" ] && { echo "✓ Reset complete"; exit 0; }
             sleep 2
           done
-          echo "::error::Staging branch reset did not complete within 60s"
+          echo "::error::preview/staging branch reset did not complete within 60s"
           exit 1
 
       - name: Deploy to Vercel (staging)
@@ -155,9 +175,8 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        # No --prod: main is no longer the production branch (productionBranch=release).
-        # This deploys as a Preview, which Vercel auto-aliases to staging.app.perifeye.com
-        # (the domain bound to gitBranch=main in the trace-app project).
+        # No --prod: deploys as Preview, auto-aliased to staging.app.perifeye.com
+        # (Vercel domain bound to gitBranch=staging in the trace-app project).
         run: npx vercel@latest deploy --token "$VERCEL_TOKEN" --yes
 
       - name: Smoke test
@@ -168,7 +187,7 @@ jobs:
 
   deploy-production:
     needs: [quality, frontend]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
 
@@ -185,9 +204,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Migrations now run as part of Vercel's buildCommand (see vercel.json),
-      # using DATABASE_URL_UNPOOLED for the direct connection. CI no longer
-      # needs to migrate first — Vercel build is the single source of truth.
+      # Migrations run as part of Vercel's buildCommand against production main
+      # Neon branch (Marketplace-injected DATABASE_URL_UNPOOLED).
 
       - name: Deploy to Vercel (production)
         env:
