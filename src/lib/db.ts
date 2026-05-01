@@ -16,22 +16,8 @@ function getDb(): PrismaClient {
 }
 
 export const db = new Proxy({} as PrismaClient, {
-  get(_target, prop, receiver) {
+  get(_target, prop) {
     const client = getDb();
-    const value = (client as unknown as Record<string | symbol, unknown>)[prop];
-
-    // Intercept $disconnect to reset the singleton so subsequent
-    // accesses re-create the client (needed for test isolation).
-    if (prop === "$disconnect") {
-      return async () => {
-        await (client as PrismaClient).$disconnect();
-        _db = null;
-      };
-    }
-
-    if (typeof value === "function") {
-      return value.bind(client);
-    }
-    return value;
+    return (client as unknown as Record<string | symbol, unknown>)[prop];
   },
 });

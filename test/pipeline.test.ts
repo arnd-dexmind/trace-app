@@ -146,7 +146,6 @@ test("diff: same item observed in different zones across walkthroughs updates lo
     assert.equal(d2.locationHistory[0].zoneId, zoneB.id); // most recent first
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -230,7 +229,6 @@ test("diff: item moved to different storage location is tracked in location hist
     assert.ok(storageLocIds.includes(locB.id));
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -313,7 +311,6 @@ test("repair pipeline: observation → create issue → in_progress → resolve"
     assert.equal(resolvedList[0].status, "resolved");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -393,7 +390,6 @@ test("entity matching: item identity link count grows with each merge", async ()
     assert.equal(itemsFinal.length, 1);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -438,7 +434,6 @@ test("walkthrough that is applied cannot accept new observations", async () => {
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -464,7 +459,6 @@ test("observation ingestion with missing walkthroughId returns 400", async () =>
     assert.equal(body.error.code, "BAD_REQUEST");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -490,7 +484,6 @@ test("repair creation requires title", async () => {
     assert.equal(body.error.code, "BAD_REQUEST");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -537,7 +530,6 @@ test("repair creation with itemId links repair to inventory item", async () => {
     assert.equal(repair.title, "AC unit not cooling");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -607,7 +599,6 @@ test("inventory search by name returns partial matches", async () => {
     assert.equal(results3.length, 0);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -629,7 +620,6 @@ test("GET /api/spaces/:id/inventory/:itemId returns 404 for non-existent item", 
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -730,7 +720,6 @@ test("diff: auto-apply accepts unchanged items (same item, same zone, same stora
     assert.equal(history.length, 2);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -814,7 +803,6 @@ test("diff: moved item (different zone) is detected and goes to review", async (
     assert.equal(moved.autoApplied, false);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -903,7 +891,6 @@ test("diff: storage location change is detected as a move", async () => {
     assert.equal(moved.zoneName, "Garage");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -940,7 +927,6 @@ test("diff: first walkthrough marks everything as new", async () => {
     assert.equal(diff.previousWalkthroughId, null);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -998,7 +984,6 @@ test("diff: missing items detected when item not seen in current walkthrough", a
     assert.equal(missing.label, "monitor");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1054,7 +1039,6 @@ test("diff: repair resolution detected when repair not seen in current walkthrou
     assert.equal(resolved.label, "roof_damage");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1171,7 +1155,6 @@ test("diff: mixed scenario — auto-apply unchanged, flag moved and new items fo
     assert.equal(laminatorUpdated?.status, "pending");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1215,7 +1198,6 @@ test("diff: GET /api/spaces/:id/walkthroughs/:wid/diff returns stored diff", asy
     assert.equal(diffBody.currentState.items[0].label, "test_item");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1308,6 +1290,5 @@ test("diff: all items auto-applied transitions walkthrough directly to applied",
     assert.equal(reviewTask?.status, "completed");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });

@@ -83,7 +83,6 @@ test("POST /api/spaces creates a space", async () => {
     assert.equal(space.tenantId, "tenant-a");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -107,7 +106,6 @@ test("POST /api/spaces validates name", async () => {
     assert.ok(body.error.message.includes("name"));
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -132,7 +130,6 @@ test("GET /api/spaces lists spaces for tenant", async () => {
     assert.equal(listA[0].name, "Test Home");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -156,7 +153,6 @@ test("GET /api/spaces/:id returns space with counts", async () => {
     assert.equal(detail.repairCount, 0);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -174,7 +170,6 @@ test("GET /api/spaces/:id returns 404 for unknown space", async () => {
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -192,7 +187,6 @@ test("tenant header is required for space APIs", async () => {
     assert.equal(body.error.code, "BAD_REQUEST");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -219,7 +213,6 @@ test("POST /api/spaces/:id/walkthroughs creates walkthrough", async () => {
     assert.equal(wt.spaceId, space.id);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -243,7 +236,6 @@ test("GET /api/spaces/:id/walkthroughs lists walkthroughs", async () => {
     assert.equal(list.length, 2);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -266,7 +258,6 @@ test("POST /api/spaces/:id/walkthroughs/:wid/process transitions uploaded → pr
     assert.ok(result.processedAt !== null);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -292,7 +283,6 @@ test("process endpoint rejects non-uploaded walkthrough", async () => {
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -347,7 +337,6 @@ test("POST /api/spaces/:id/observations ingests items and creates review task", 
     assert.equal(updated!.status, "awaiting_review");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -383,7 +372,6 @@ test("GET /api/review/queue lists pending review tasks", async () => {
     assert.equal(queue[0].status, "pending");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -425,7 +413,6 @@ test("GET /api/review/queue/:taskId returns task with candidates and evidence", 
     assert.equal(task.itemObservations[0].confidence, 0.95);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -485,7 +472,6 @@ test("POST /api/review/:taskId/actions accept creates inventory item", async () 
     assert.equal(updated!.status, "applied");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -560,7 +546,6 @@ test("POST /api/review/:taskId/actions merge links observation to existing item"
     assert.equal(items2.length, 1);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -615,7 +600,6 @@ test("POST /api/review/:taskId/actions relabel changes observation label", async
     assert.equal(task.itemObservations[0].label, "table");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -670,7 +654,6 @@ test("POST /api/review/:taskId/actions reject sets observation status to rejecte
     assert.equal(task.itemObservations[0].status, "rejected");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -724,7 +707,6 @@ test("POST /api/review/:taskId/actions duplicate reject on rejected observation 
     assert.equal(task.itemObservations[0].status, "rejected");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -779,7 +761,6 @@ test("POST /api/review/:taskId/actions re-accept after reject creates new item",
     assert.equal(items[0].name, "reclaimed_wood");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -815,7 +796,6 @@ test("POST /api/review/:taskId/actions rejects invalid actionType", async () => 
     assert.ok(body.error.message.includes("actionType"));
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -851,7 +831,6 @@ test("POST /api/review/:taskId/actions requires observationId for accept", async
     assert.ok(body.error.message.includes("observationId"));
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -893,7 +872,6 @@ test("POST /api/review/:taskId/actions requires newLabel for relabel", async () 
     assert.ok(body.error.message.includes("newLabel"));
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -911,7 +889,6 @@ test("GET /api/review/queue/:taskId returns 404 for non-existent task", async ()
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -931,7 +908,6 @@ test("POST /api/review/:taskId/actions returns 404 for non-existent task", async
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -979,7 +955,6 @@ test("merge without itemId behaves like accept and creates new item", async () =
     assert.equal(items[0].name, "duplicate_key");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1010,7 +985,6 @@ test("POST /api/spaces/:id/repairs creates repair issue", async () => {
     assert.equal(repair.status, "open");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1049,7 +1023,6 @@ test("GET /api/spaces/:id/repairs lists repairs with optional status filter", as
     assert.equal(filtered.length, 2);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1083,7 +1056,6 @@ test("PATCH /api/spaces/:id/repairs/:issueId updates repair status", async () =>
     assert.ok(updated.resolvedAt !== null);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1119,7 +1091,6 @@ test("PATCH repair status open → in_progress", async () => {
     assert.equal(updated.status, "in_progress");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1159,7 +1130,6 @@ test("PATCH repair status in_progress → resolved sets resolvedAt", async () =>
     assert.ok(updated.resolvedAt !== null);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1198,7 +1168,6 @@ test("PATCH repair status in_progress → open (reopen)", async () => {
     assert.equal(updated.status, "open");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1237,7 +1206,6 @@ test("PATCH repair status resolved → open (reopen)", async () => {
     assert.equal(updated.status, "open");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1268,7 +1236,6 @@ test("PATCH repair status rejects invalid status value", async () => {
     assert.equal(res.status, 400);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1292,7 +1259,6 @@ test("PATCH repair returns 404 for non-existent repair", async () => {
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1350,7 +1316,6 @@ test("GET /api/spaces/:id/inventory/:itemId returns item with location history",
     assert.equal(detail.identityLinks.length, 1);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1372,7 +1337,6 @@ test("unknown API routes return structured 404", async () => {
     assert.ok(body.error.requestId.length > 0);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1390,7 +1354,6 @@ test("health endpoint still works", async () => {
     assert.equal(body.status, "ok");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1542,7 +1505,6 @@ test("full lifecycle: upload → process → review → applied", async () => {
     assert.equal(detail.repairCount, 1);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1573,7 +1535,6 @@ test("POST /api/spaces/:id/zones creates a zone", async () => {
     assert.equal(zone.tenantId, "tenant-a");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1597,7 +1558,6 @@ test("POST /api/spaces/:id/zones validates name", async () => {
     assert.equal(body.error.code, "BAD_REQUEST");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1632,7 +1592,6 @@ test("GET /api/spaces/:id/zones lists zones", async () => {
     assert.equal(zones[1].name, "Kitchen");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1659,7 +1618,6 @@ test("GET /api/spaces/:id/zones enforces tenant isolation", async () => {
     assert.equal(res.status, 404); // space not visible to tenant-b
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1689,7 +1647,6 @@ test("POST /api/spaces/:id/storage-locations creates a location", async () => {
     assert.equal(loc.spaceId, space.id);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1721,7 +1678,6 @@ test("POST /api/spaces/:id/storage-locations with zone association", async () =>
     assert.equal(loc.zoneId, zone.id);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1765,7 +1721,6 @@ test("GET /api/spaces/:id/storage-locations returns nested tree", async () => {
     assert.equal(locations[0].children[0].name, "Aisle 3");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1805,7 +1760,6 @@ test("GET /api/spaces/:id/storage-locations includes zone info", async () => {
     assert.equal(locations[0].zone!.name, "Section B");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1853,7 +1807,6 @@ test("POST /api/spaces/:id/walkthroughs/:wid/media registers media asset", async
     assert.equal(asset.tenantId, "tenant-a");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1896,7 +1849,6 @@ test("GET /api/media-assets/:id returns asset detail", async () => {
     assert.equal(asset.walkthrough.id, wt.id);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1929,7 +1881,6 @@ test("GET /api/media-assets/:id enforces tenant isolation", async () => {
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1947,7 +1898,6 @@ test("GET /api/media-assets/:id returns 404 for non-existent asset", async () =>
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1976,7 +1926,6 @@ test("POST /api/spaces/:id/walkthroughs/:wid/media validates required fields", a
     assert.equal(body.error.code, "BAD_REQUEST");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -1998,7 +1947,6 @@ test("tenant isolation: cannot access space from another tenant", async () => {
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2018,7 +1966,6 @@ test("tenant isolation: cannot list walkthroughs of another tenant's space", asy
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2040,7 +1987,6 @@ test("tenant isolation: cannot create walkthrough in another tenant's space", as
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2060,7 +2006,6 @@ test("tenant isolation: cannot access inventory of another tenant's space", asyn
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2080,7 +2025,6 @@ test("tenant isolation: cannot access repairs of another tenant's space", async 
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2128,7 +2072,6 @@ test("tenant isolation: review queue scoped to requesting tenant", async () => {
     assert.notEqual(tasksA[0].id, tasksB[0].id);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2158,7 +2101,6 @@ test("tenant isolation: cannot access review task from another tenant", async ()
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2192,7 +2134,6 @@ test("tenant isolation: cannot post review action to another tenant's task", asy
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2224,7 +2165,6 @@ test("tenant isolation: cannot patch repair from another tenant", async () => {
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2292,7 +2232,6 @@ test("concurrent walkthroughs on same space produce isolated observations", asyn
     assert.ok(wtIds.includes(wt2.id));
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2362,7 +2301,6 @@ test("concurrent walkthrough processing: accept all items across walkthroughs", 
     assert.deepEqual(names, ["hammer", "wrench"]);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2408,7 +2346,6 @@ test("POST /api/spaces/:id/observations rejects walkthrough that is already appl
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2466,7 +2403,6 @@ test("GET /api/spaces/:id/inventory filters by zoneId", async () => {
     assert.equal(noMatchItems.length, 0);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2512,7 +2448,6 @@ test("tenant isolation: cannot access specific inventory item from another tenan
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2548,7 +2483,6 @@ test("POST /api/spaces/:id/observations accepts empty items and repairs arrays",
     assert.ok(result.reviewTask.id.length > 0);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2574,7 +2508,6 @@ test("POST /api/spaces/:id/observations with no items or repairs still creates r
     assert.equal(result.reviewTask.status, "pending");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2599,7 +2532,6 @@ test("POST /api/spaces/:id/observations rejects non-existent walkthrough", async
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2641,7 +2573,6 @@ test("relabel action changes observation label", async () => {
     assert.equal(task.itemObservations[0].label, "corrected");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2704,7 +2635,6 @@ test("merge into existing item links observation without creating new item", asy
     assert.equal(detail.identityLinks.length, 2);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2740,7 +2670,6 @@ test("repair observation appears in review task detail", async () => {
     assert.equal(task.repairObservations[0].label, "broken_window");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2778,7 +2707,6 @@ test("review action with note is recorded", async () => {
     assert.equal(action.actionType, "accept");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -2829,6 +2757,5 @@ test("walkthrough status transitions: uploaded → processing → awaiting_revie
     assert.equal(wtsF.find((w) => w.id === wt.id)!.status, "applied");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });

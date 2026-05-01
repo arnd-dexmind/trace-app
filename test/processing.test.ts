@@ -83,7 +83,6 @@ test("walkthrough creation seeds the first processing stage", async () => {
     assert.equal(jobs[0].status, "pending");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -149,7 +148,6 @@ test("POST /process runs pipeline and transitions walkthrough to awaiting_review
     assert.equal(tasks.length, 1);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -195,7 +193,6 @@ test("POST /api/processing/tick processes pending jobs", async () => {
     }
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -259,7 +256,6 @@ test("GET /api/processing/walkthroughs/:wid/state returns processing state", asy
     assert.equal(state2.done, true);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -299,7 +295,6 @@ test("GET /api/processing/jobs/:id returns a single job", async () => {
     assert.equal(job.status, "pending");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -317,7 +312,6 @@ test("GET /api/processing/jobs/:id returns 404 for non-existent job", async () =
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -372,7 +366,6 @@ test("GET /api/processing/metrics returns stage-level metrics", async () => {
     }
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -425,7 +418,7 @@ test("job queue dequeue picks up oldest pending job and cascades through stages"
   // multimodal_extraction should have been cascaded
   assert.ok(stages.includes("multimodal_extraction:pending"));
 
-  await db.$disconnect();
+  
 });
 
 test("job queue retry with exponential backoff", async () => {
@@ -482,7 +475,7 @@ test("job queue retry with exponential backoff", async () => {
   const completed = jobs2.find((j) => j.id === job!.id);
   assert.equal(completed!.status, "completed");
 
-  await db.$disconnect();
+  
 });
 
 test("job queue dead-letter after max attempts exhausted", async () => {
@@ -519,7 +512,7 @@ test("job queue dead-letter after max attempts exhausted", async () => {
   assert.equal(dead!.status, "dead");
   assert.equal(dead!.error, "error 3");
 
-  await db.$disconnect();
+  
 });
 
 // ── Tenant isolation ───────────────────────────────────────────────────────
@@ -553,7 +546,7 @@ test("job queries are tenant-scoped", async () => {
   assert.equal(jobsB.length, 1);
   assert.equal(jobsB[0].tenantId, "tenant-b");
 
-  await db.$disconnect();
+  
 });
 
 // ── Walkthrough failed status on dead job ──────────────────────────────────
@@ -612,7 +605,6 @@ test("walkthrough transitions to failed when job reaches dead-letter", async () 
     assert.equal(wtUpdated!.status, "failed");
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
 
@@ -649,6 +641,5 @@ test("POST /process returns 404 for walkthrough not in uploaded state", async ()
     assert.equal(res.status, 404);
   } finally {
     server.close();
-    await db.$disconnect();
   }
 });
