@@ -121,9 +121,34 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Migrations now run as part of Vercel's buildCommand (see vercel.json),
-      # using DATABASE_URL_UNPOOLED for the direct connection. CI no longer
-      # needs to migrate first — Vercel build is the single source of truth.
+      # Reset the long-lived staging Neon branch from its parent (main) so each
+      # main push tests migrations against the *current* production schema/data.
+      # The branch endpoint stays stable; only the data is replaced.
+      # Vercel's buildCommand then runs `prisma migrate deploy` against this
+      # freshly-reset branch.
+      - name: Reset staging Neon branch from main
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_STAGING_BRANCH_ID: ${{ secrets.NEON_STAGING_BRANCH_ID }}
+        run: |
+          set -e
+          echo "Resetting staging branch from parent..."
+          curl -fsSL -X POST \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_STAGING_BRANCH_ID}/reset_to_parent" \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            -H "Content-Type: application/json" > /dev/null
+          for i in $(seq 1 30); do
+            state=$(curl -fsSL \
+              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_STAGING_BRANCH_ID}" \
+              -H "Authorization: Bearer ${NEON_API_KEY}" \
+              | python3 -c "import json,sys; print(json.load(sys.stdin)['branch']['current_state'])")
+            echo "  attempt $i: state=$state"
+            [ "$state" = "ready" ] && { echo "✓ Reset complete"; exit 0; }
+            sleep 2
+          done
+          echo "::error::Staging branch reset did not complete within 60s"
+          exit 1
 
       - name: Deploy to Vercel (staging)
         env:
