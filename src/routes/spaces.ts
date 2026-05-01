@@ -4,7 +4,7 @@ import { db } from "../lib/db.js";
 import { sendApiError } from "../lib/errors.js";
 import { createAuthMiddleware } from "../lib/auth.js";
 import { isUuid } from "../lib/validation.js";
-import type { PaginatedResult } from "../data.js";
+import type { PaginatedResult, SearchItemsParams } from "../data.js";
 import {
   createSpace,
   getSpace,
@@ -29,6 +29,8 @@ import {
   createMediaAsset,
   getWalkthroughDiff,
   getWalkthroughResults,
+  getWalkthroughResultItem,
+  updateWalkthroughResultItem,
   bulkProcessResults,
   listAliases,
   createAlias,
@@ -292,6 +294,71 @@ spacesRouter.post("/:id/walkthroughs/:walkthroughId/results/bulk", requireUuidPa
   res.status(200).json(result);
 });
 
+// Single item GET + PATCH
+spacesRouter.get("/:id/walkthroughs/:walkthroughId/results/:itemId", async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const item = await getWalkthroughResultItem(
+    db,
+    req.params.walkthroughId,
+    req.params.itemId,
+    res.locals.tenantId,
+  );
+  if (!item || item.spaceId !== req.params.id) {
+    sendApiError(res, 404, "NOT_FOUND", "Item not found in this walkthrough");
+    return;
+  }
+
+  res.status(200).json(item);
+});
+
+spacesRouter.patch("/:id/walkthroughs/:walkthroughId/results/:itemId", requireUuidParams("id", "walkthroughId", "itemId"), async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const label = typeof req.body?.label === "string" ? req.body.label.trim() : undefined;
+  const category = typeof req.body?.category === "string" ? req.body.category.trim() : undefined;
+  const zoneId = req.body?.zoneId !== undefined ? (typeof req.body.zoneId === "string" ? req.body.zoneId : null) : undefined;
+  const storageLocationId = req.body?.storageLocationId !== undefined
+    ? (typeof req.body.storageLocationId === "string" ? req.body.storageLocationId : null)
+    : undefined;
+  const status = typeof req.body?.status === "string" ? req.body.status : undefined;
+
+  if (label === "" && category === undefined && zoneId === undefined && storageLocationId === undefined && status === undefined) {
+    sendApiError(res, 400, "BAD_REQUEST", "At least one field to update is required");
+    return;
+  }
+  if (status !== undefined && !["accepted", "rejected", "pending"].includes(status)) {
+    sendApiError(res, 400, "BAD_REQUEST", "status must be accepted, rejected, or pending");
+    return;
+  }
+
+  const result = await updateWalkthroughResultItem(db, {
+    observationId: req.params.itemId,
+    walkthroughId: req.params.walkthroughId,
+    tenantId: res.locals.tenantId,
+    label: label || undefined,
+    category: category || undefined,
+    zoneId,
+    storageLocationId,
+    status: status as "accepted" | "rejected" | "pending" | undefined,
+  });
+
+  if (!result) {
+    sendApiError(res, 404, "NOT_FOUND", "Item not found in this walkthrough");
+    return;
+  }
+
+  res.status(200).json(result);
+});
+
 // ── Inventory ─────────────────────────────────────────────────────────────────
 
 spacesRouter.get("/:id/inventory", async (req, res) => {
@@ -302,9 +369,17 @@ spacesRouter.get("/:id/inventory", async (req, res) => {
   }
 
   const name = typeof req.query.name === "string" ? req.query.name : undefined;
-  const zoneId =
-    typeof req.query.zoneId === "string" ? req.query.zoneId : undefined;
-
+  const zoneId = typeof req.query.zoneId === "string" ? req.query.zoneId : undefined;
+  const category = typeof req.query.category === "string" ? req.query.category : undefined;
+  const confidenceMin = typeof req.query.confidenceMin === "string" ? parseFloat(req.query.confidenceMin) : undefined;
+  const confidenceMax = typeof req.query.confidenceMax === "string" ? parseFloat(req.query.confidenceMax) : undefined;
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const sort = ["name", "category", "zone", "lastSeen", "confidence"].includes(String(req.query.sort))
+    ? req.query.sort as SearchItemsParams["sort"]
+    : undefined;
+  const order = ["asc", "desc"].includes(String(req.query.order))
+    ? req.query.order as SearchItemsParams["order"]
+    : undefined;
   const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
   const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : undefined;
   const result = await searchItems(db, {
@@ -312,6 +387,12 @@ spacesRouter.get("/:id/inventory", async (req, res) => {
     tenantId: res.locals.tenantId,
     name,
     zoneId,
+    category,
+    confidenceMin,
+    confidenceMax,
+    status,
+    sort,
+    order,
     cursor,
     limit,
   });

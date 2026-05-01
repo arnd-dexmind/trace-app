@@ -137,11 +137,13 @@ export interface ProcessingJob {
 }
 
 export interface WalkthroughProcessingState {
-  walkthroughId: string;
-  status: string;
+  total: number;
+  pending: number;
+  dead: number;
+  completed: number;
+  done: boolean;
+  failed: boolean;
   jobs: ProcessingJob[];
-  itemObservationCount: number;
-  repairObservationCount: number;
 }
 
 export function listWalkthroughs(spaceId: string) {
@@ -319,9 +321,40 @@ export interface IdentityLink {
   observation?: { id: string; label: string; confidence: number | null; keyframeUrl: string | null } | null;
 }
 
-export function searchItems(spaceId: string, name?: string) {
-  const params = name ? `?name=${encodeURIComponent(name)}` : "";
-  return request<InventoryItem[]>(`/api/spaces/${spaceId}/inventory${params}`);
+export interface ItemSearchParams {
+  name?: string;
+  zoneId?: string;
+  category?: string;
+  confidenceMin?: number;
+  confidenceMax?: number;
+  status?: string;
+  sort?: "name" | "category" | "zone" | "lastSeen" | "confidence";
+  order?: "asc" | "desc";
+  cursor?: string;
+  limit?: number;
+}
+
+export function searchItems(spaceId: string, opts?: string | ItemSearchParams) {
+  if (typeof opts === "string" || opts === undefined) {
+    const name = opts || undefined;
+    const p = new URLSearchParams();
+    if (name) p.set("name", name);
+    const qs = p.toString();
+    return request<InventoryItem[]>(`/api/spaces/${spaceId}/inventory${qs ? `?${qs}` : ""}`);
+  }
+  const p = new URLSearchParams();
+  if (opts.name) p.set("name", opts.name);
+  if (opts.zoneId) p.set("zoneId", opts.zoneId);
+  if (opts.category) p.set("category", opts.category);
+  if (opts.confidenceMin !== undefined) p.set("confidenceMin", String(opts.confidenceMin));
+  if (opts.confidenceMax !== undefined) p.set("confidenceMax", String(opts.confidenceMax));
+  if (opts.status) p.set("status", opts.status);
+  if (opts.sort) p.set("sort", opts.sort);
+  if (opts.order) p.set("order", opts.order);
+  if (opts.cursor) p.set("cursor", opts.cursor);
+  if (opts.limit !== undefined) p.set("limit", String(opts.limit));
+  const qs = p.toString();
+  return request<InventoryItem[]>(`/api/spaces/${spaceId}/inventory${qs ? `?${qs}` : ""}`);
 }
 
 export function getItem(spaceId: string, itemId: string) {
@@ -423,6 +456,71 @@ export function bulkProcessResults(
   return request<{ processed: number; action: string }>(
     `/api/spaces/${spaceId}/walkthroughs/${walkthroughId}/results/bulk`,
     { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+// ── Walkthrough Result Item Detail ────────────────────────────────────────────
+
+export interface WalkthroughResultDetail {
+  id: string;
+  walkthroughId: string;
+  spaceId: string;
+  label: string;
+  confidence: number | null;
+  category: string | null;
+  zoneId: string | null;
+  zoneName: string | null;
+  storageLocationId: string | null;
+  storageLocationName: string | null;
+  keyframeUrl: string | null;
+  bbox: string | null;
+  status: string;
+  resultStatus: "new" | "matched" | "relocated" | "missing";
+  itemId: string | null;
+  itemName: string | null;
+  previousZoneName: string | null;
+  frameRef: string | null;
+  createdAt: string;
+  walkthroughStatus: string;
+  suggestedLabels: { label: string; confidence: number }[];
+  prevItemId: string | null;
+  nextItemId: string | null;
+  itemIndex: number;
+  totalItems: number;
+  confidenceBreakdown: {
+    category: number | null;
+    identity: number | null;
+    location: number | null;
+  } | null;
+}
+
+export function getWalkthroughResultItem(
+  spaceId: string,
+  walkthroughId: string,
+  itemId: string,
+) {
+  return request<WalkthroughResultDetail>(
+    `/api/spaces/${spaceId}/walkthroughs/${walkthroughId}/results/${itemId}`,
+  );
+}
+
+export interface UpdateResultItemInput {
+  label?: string;
+  category?: string;
+  zoneId?: string | null;
+  storageLocationId?: string | null;
+  status?: "accepted" | "rejected" | "pending";
+}
+
+export function updateWalkthroughResultItem(
+  spaceId: string,
+  walkthroughId: string,
+  itemId: string,
+  body: UpdateResultItemInput,
+) {
+  return request<WalkthroughResultDetail>(
+    `/api/spaces/${spaceId}/walkthroughs/${walkthroughId}/results/${itemId}`,
+    { method: "PATCH", body: JSON.stringify(body) },
   );
 }
 

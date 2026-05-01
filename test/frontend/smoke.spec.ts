@@ -603,3 +603,95 @@ test("item detail shows not-found state for nonexistent item", async ({ page }) 
   await expect(page.getByText("Item Not Found")).toBeVisible();
   await expect(page.getByRole("link", { name: "Back to Results" })).toBeVisible();
 });
+
+// ── Item Search Sort & Filter ─────────────────────────────────────────────
+
+test("item search page renders sort, filter, and category chip UI", async ({ page }) => {
+  await page.goto("/items");
+  await page.waitForLoadState("networkidle");
+
+  // Search input should be visible
+  const searchInput = page.locator('input[type="search"]');
+  await expect(searchInput).toBeVisible();
+
+  // Sort dropdown should be visible
+  const sortSelect = page.locator("select").first();
+  await expect(sortSelect).toBeVisible();
+  await expect(sortSelect).toHaveValue("name");
+
+  // Order toggle button should be visible
+  const orderBtn = page.getByLabel(/Sort/);
+  await expect(orderBtn).toBeVisible();
+
+  // Filter toggle should exist
+  const filterBtn = page.getByText("Filters");
+  await expect(filterBtn).toBeVisible();
+});
+
+test("item search filter panel opens and shows category chips", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  // Seed an item with a category so filter chips populate
+  await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/inventory`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: { name: "Filter Test Wrench", category: "Tools", quantity: 1 },
+  });
+
+  await page.goto("/items");
+  await page.waitForLoadState("networkidle");
+
+  // Open filter panel
+  const filterBtn = page.getByText("Filters");
+  await filterBtn.click();
+
+  // Category chips should be visible
+  await expect(page.getByText("Category")).toBeVisible();
+  await expect(page.getByText("Tools")).toBeVisible();
+
+  // Zone filter should be present
+  await expect(page.getByText("Zone")).toBeVisible();
+
+  // Confidence range inputs should be present
+  await expect(page.locator('input[type="number"][placeholder="Min"]')).toBeVisible();
+  await expect(page.locator('input[type="number"][placeholder="Max"]')).toBeVisible();
+});
+
+test("item search sort changes order", async ({ page }) => {
+  await page.goto("/items");
+  await page.waitForLoadState("networkidle");
+
+  // Change sort to Category
+  const sortSelect = page.locator("select").first();
+  await sortSelect.selectOption("category");
+
+  // URL should update
+  await expect(page).toHaveURL(/sort=category/);
+
+  // Toggle order to descending
+  const orderBtn = page.getByLabel(/Sort/);
+  await orderBtn.click();
+
+  // URL should have order=desc
+  await expect(page).toHaveURL(/order=desc/);
+
+  // Toggle back to ascending
+  await orderBtn.click();
+  await expect(page).not.toHaveURL(/order=desc/);
+});
+
+test("item search clear filters resets all state", async ({ page }) => {
+  await page.goto("/items?sort=category&order=desc&category=Tools");
+  await page.waitForLoadState("networkidle");
+
+  // Clear all filters button should be visible
+  const clearBtn = page.getByText("Clear all");
+  await expect(clearBtn).toBeVisible();
+
+  // Click clear
+  await clearBtn.click();
+
+  // URL should reset to /items (no query params)
+  await expect(page).not.toHaveURL(/sort=/);
+  await expect(page).not.toHaveURL(/category=/);
+});
