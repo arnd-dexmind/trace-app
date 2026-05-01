@@ -241,7 +241,7 @@ export async function ingestObservations(
   if (!wt || wt.tenantId !== params.tenantId || wt.spaceId !== params.spaceId) {
     return null;
   }
-  if (wt.status !== "uploaded" && wt.status !== "processing") {
+  if (wt.status !== "uploaded" && wt.status !== "processing" && wt.status !== "awaiting_review") {
     return null;
   }
 
