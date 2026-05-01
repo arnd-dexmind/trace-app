@@ -5,22 +5,12 @@ import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import { EmptyState } from "../components/ui/EmptyState";
 
-type UploadState = "idle" | "selected" | "uploading" | "processing" | "complete" | "error";
+type UploadState = "idle" | "selected" | "uploading" | "processing" | "error";
 
 interface FileInfo {
   file: File;
   name: string;
   sizeLabel: string;
-}
-
-interface ProcessResult {
-  walkthroughId: string;
-  stats?: {
-    itemsDetected: number;
-    pendingReview: number;
-    repairsFlagged: number;
-    processingTime: string;
-  };
 }
 
 const STATUS_CONFIG: Record<string, { variant: "brand" | "status-monitoring" | "status-open" | "status-resolved"; label: string }> = {
@@ -39,7 +29,6 @@ export function Upload() {
   const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
-  const [result, setResult] = useState<ProcessResult | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [dragOver, setDragOver] = useState(false);
 
@@ -56,6 +45,8 @@ export function Upload() {
   const [loadingWts, setLoadingWts] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   // ── Load spaces ────────────────────────────────────────────────────
   const refreshSpaces = useCallback(async () => {
@@ -147,6 +138,8 @@ export function Upload() {
     setFileInfo(null);
     setUploadState("idle");
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (photoInputRef.current) photoInputRef.current.value = "";
+    if (videoInputRef.current) videoInputRef.current.value = "";
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -159,7 +152,6 @@ export function Upload() {
   const uploadAndProcess = async () => {
     if (!fileInfo || !activeSpaceId) return;
 
-    const start = Date.now();
     setUploadState("uploading");
     setProgress(0);
     setProgressLabel("Uploading file…");
@@ -183,22 +175,10 @@ export function Upload() {
       setProgress(80);
       setProgressLabel("Starting AI processing…");
 
-      const processResult = await startProcessing(activeSpaceId, walkthrough.id);
-      const elapsed = ((Date.now() - start) / 1000).toFixed(0);
-
-      setProgress(100);
-      setUploadState("complete");
-      setResult({
-        walkthroughId: walkthrough.id,
-        stats: {
-          itemsDetected: processResult.observationCount ?? 0,
-          pendingReview: processResult.reviewTaskCount ?? 0,
-          repairsFlagged: 0,
-          processingTime: `${Math.floor(Number(elapsed) / 60)}m ${Number(elapsed) % 60}s`,
-        },
-      });
+      await startProcessing(activeSpaceId, walkthrough.id);
 
       refreshWalkthroughs();
+      navigate(`/processing/${walkthrough.id}`);
     } catch (e) {
       setUploadState("error");
       setErrorMessage(e instanceof Error ? e.message : "Processing failed");
@@ -290,28 +270,53 @@ export function Upload() {
       {/* ── Upload Area ── */}
       <div style={{ textAlign: "center" }}>
         {uploadState === "idle" && (
-          <div
-            style={dropZoneStyle(dragOver)}
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            role="button"
-            tabIndex={0}
-            aria-label="Drop walkthrough video here or tap to browse"
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click(); }}
-          >
-            <div style={{ fontSize: 48, marginBottom: "var(--sm-space-4)", lineHeight: 1 }}>&#128249;</div>
-            <p style={{ fontSize: "var(--sm-text-lg)", fontWeight: 600, marginBottom: "var(--sm-space-1)" }}>
-              Drop walkthrough video here
-            </p>
-            <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)" }}>
-              or tap to browse files
-            </p>
-            <p style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)", marginTop: "var(--sm-space-3)" }}>
-              MP4, MOV, or image sequence (ZIP) &middot; up to 50 MB
-            </p>
-          </div>
+          <>
+            <div
+              style={dropZoneStyle(dragOver)}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              role="button"
+              tabIndex={0}
+              aria-label="Drop walkthrough video here or tap to browse"
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click(); }}
+            >
+              <div style={{ fontSize: 48, marginBottom: "var(--sm-space-4)", lineHeight: 1 }}>&#128249;</div>
+              <p style={{ fontSize: "var(--sm-text-lg)", fontWeight: 600, marginBottom: "var(--sm-space-1)" }}>
+                Drop walkthrough video here
+              </p>
+              <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)" }}>
+                or tap to browse files
+              </p>
+              <p style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)", marginTop: "var(--sm-space-3)" }}>
+                MP4, MOV, or image sequence (ZIP) &middot; up to 50 MB
+              </p>
+            </div>
+
+            {/* Camera capture */}
+            <div style={captureDividerStyle} aria-hidden="true">or</div>
+            <div className="capture-options" style={{ marginBottom: "var(--sm-space-6)" }}>
+              <button
+                type="button"
+                style={captureBtnStyle}
+                onClick={() => photoInputRef.current?.click()}
+              >
+                <span style={{ fontSize: 32, display: "block" }}>&#128247;</span>
+                <span style={captureBtnLabelStyle}>Take Photo</span>
+                <span style={captureBtnHintStyle}>Use device camera</span>
+              </button>
+              <button
+                type="button"
+                style={captureBtnStyle}
+                onClick={() => videoInputRef.current?.click()}
+              >
+                <span style={{ fontSize: 32, display: "block" }}>&#127909;</span>
+                <span style={captureBtnLabelStyle}>Record Video</span>
+                <span style={captureBtnHintStyle}>Capture walkthrough</span>
+              </button>
+            </div>
+          </>
         )}
 
         {uploadState === "selected" && fileInfo && (
@@ -358,43 +363,6 @@ export function Upload() {
           </div>
         )}
 
-        {uploadState === "complete" && result?.stats && (
-          <div style={resultCardStyle("success")}>
-            <div style={{ fontSize: 32, marginBottom: "var(--sm-space-3)" }}>&#9989;</div>
-            <h3 style={{ fontSize: "var(--sm-text-lg)", marginBottom: "var(--sm-space-1)" }}>
-              Processing Complete
-            </h3>
-            <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)", marginBottom: "var(--sm-space-3)" }}>
-              Walkthrough processed in {result.stats.processingTime}
-            </p>
-
-            <div style={statsGridStyle}>
-              <StatItem value={result.stats.itemsDetected} label="Items Detected" />
-              <StatItem value={result.stats.pendingReview} label="Pending Review" />
-              <StatItem value={result.stats.repairsFlagged} label="Repairs Flagged" />
-            </div>
-
-            <div style={{ display: "flex", gap: "var(--sm-space-3)", flexWrap: "wrap", justifyContent: "center", marginTop: "var(--sm-space-4)" }}>
-              <Button variant="primary" size="md" onClick={() => navigate("/review")}>
-                Open in Operator Console
-              </Button>
-              <Button
-                variant="outline"
-                size="md"
-                onClick={() => {
-                  setUploadState("idle");
-                  setFileInfo(null);
-                  setResult(null);
-                  setProgress(0);
-                  if (fileInputRef.current) fileInputRef.current.value = "";
-                }}
-              >
-                Upload Another
-              </Button>
-            </div>
-          </div>
-        )}
-
         {uploadState === "error" && (
           <div style={resultCardStyle("error")}>
             <div style={{ fontSize: 32, marginBottom: "var(--sm-space-3)" }}>&#9888;&#65039;</div>
@@ -415,6 +383,22 @@ export function Upload() {
         ref={fileInputRef}
         type="file"
         accept="video/mp4,video/quicktime,application/zip"
+        style={{ display: "none" }}
+        onChange={handleFileChange}
+      />
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: "none" }}
+        onChange={handleFileChange}
+      />
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/*"
+        capture="environment"
         style={{ display: "none" }}
         onChange={handleFileChange}
       />
@@ -479,15 +463,6 @@ function Stage({ icon, status, label }: { icon: string; status: "done" | "active
     <div style={{ display: "flex", gap: "var(--sm-space-3)", padding: "var(--sm-space-2) 0", fontSize: "var(--sm-text-sm)", alignItems: "center" }}>
       <span style={stageIconStyle(status)}>{icon || (status === "active" ? "" : "")}</span>
       <span style={stageTextStyle(status)}>{label}</span>
-    </div>
-  );
-}
-
-function StatItem({ value, label }: { value: number; label: string }) {
-  return (
-    <div style={statStyle}>
-      <div style={{ fontSize: "var(--sm-text-xl)", fontWeight: 700 }}>{value}</div>
-      <div style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)" }}>{label}</div>
     </div>
   );
 }
@@ -648,21 +623,6 @@ const resultCardStyle = (variant: "success" | "error"): React.CSSProperties => (
   marginBottom: "var(--sm-space-4)",
 });
 
-const statsGridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))",
-  gap: "var(--sm-space-3)",
-  marginBottom: "var(--sm-space-4)",
-};
-
-const statStyle: React.CSSProperties = {
-  textAlign: "center",
-  padding: "var(--sm-space-3)",
-  borderRadius: "var(--sm-radius-md)",
-  background: "var(--sm-surface-card)",
-  border: "1px solid var(--sm-border-default)",
-};
-
 const historySectionStyle: React.CSSProperties = {
   borderTop: "1px solid var(--sm-border-default)",
   paddingTop: "var(--sm-space-6)",
@@ -688,4 +648,41 @@ const wtNameStyle: React.CSSProperties = {
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+};
+
+const captureDividerStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "var(--sm-space-4)",
+  marginBottom: "var(--sm-space-6)",
+  color: "var(--sm-text-tertiary)",
+  fontSize: "var(--sm-text-sm)",
+};
+
+const captureBtnStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "var(--sm-space-2)",
+  padding: "var(--sm-space-6) var(--sm-space-4)",
+  border: "2px solid var(--sm-border-default)",
+  borderRadius: "var(--sm-radius-xl)",
+  background: "var(--sm-surface-card)",
+  cursor: "pointer",
+  transition: "all var(--sm-transition-fast)",
+  minHeight: 100,
+  textAlign: "center",
+  font: "inherit",
+};
+
+const captureBtnLabelStyle: React.CSSProperties = {
+  fontSize: "var(--sm-text-sm)",
+  fontWeight: 500,
+  color: "var(--sm-text-primary)",
+};
+
+const captureBtnHintStyle: React.CSSProperties = {
+  fontSize: "var(--sm-text-xs)",
+  color: "var(--sm-text-tertiary)",
 };

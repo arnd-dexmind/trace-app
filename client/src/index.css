@@ -9,3 +9,25 @@ body {
   -webkit-font-smoothing: antialiased;
   margin: 0;
 }
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Camera capture buttons — stack on mobile */
+.capture-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sm-space-3);
+}
+
+@media (max-width: 640px) {
+  .capture-options {
+    grid-template-columns: 1fr;
+  }
+}
