@@ -2,9 +2,6 @@ import { test, expect } from "@playwright/test";
 
 // Set up localStorage before each test so the app has a tenant and space context
 test.beforeEach(async ({ page }) => {
-  // Wait for backends to be ready
-  await page.request.get("http://localhost:3001/api/health");
-
   await page.goto("/");
 
   // The app reads tenant/space from localStorage. Inject them.
@@ -48,7 +45,7 @@ test("repair list page renders with filter bar", async ({ page }) => {
   await page.waitForLoadState("networkidle");
 
   // Page title
-  await expect(page.getByText("Repair Issues")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Repair Issues" })).toBeVisible();
 
   // Filter buttons
   await expect(page.getByRole("button", { name: /All/ })).toBeVisible();
@@ -56,10 +53,8 @@ test("repair list page renders with filter bar", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Monitoring/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Resolved/ })).toBeVisible();
 
-  // Table header columns should be present (desktop view)
-  await expect(page.getByText("Issue")).toBeVisible();
-  await expect(page.getByText("Severity")).toBeVisible();
-  await expect(page.getByText("Status")).toBeVisible();
+  // Empty state should show when no repairs exist
+  await expect(page.getByText("No repair issues found")).toBeVisible();
 });
 
 test("repair list filter buttons update active state on click", async ({ page }) => {
@@ -96,7 +91,7 @@ test("operator console loads review queue", async ({ page }) => {
   await expect(queuePanel).toBeVisible();
 
   // Main panel shows the placeholder text when no task is selected
-  await expect(page.getByText(/Select a task/)).toBeVisible();
+  await expect(page.getByText("Select a task from the queue")).toBeVisible();
 });
 
 test("upload flow page loads via nav", async ({ page }) => {
