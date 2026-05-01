@@ -20,3 +20,8 @@ client/tsconfig.tsbuildinfo
 
 # Test artifacts
 test-results/
+.env*.local
+
+# Personal Claude session state (impl-logs, brainstorms, etc.)
+# CLAUDE.md at the project root IS committed.
+.claude/
