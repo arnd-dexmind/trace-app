@@ -28,6 +28,8 @@ import {
   listStorageLocations,
   createMediaAsset,
   getWalkthroughDiff,
+  getWalkthroughResults,
+  bulkProcessResults,
   listAliases,
   createAlias,
   deleteAlias,
@@ -232,6 +234,62 @@ spacesRouter.post("/:id/walkthroughs/:walkthroughId/process", requireUuidParams(
   const procResult = await processBatch(db, res.locals.tenantId);
 
   res.status(200).json({ ...result, processing: procResult });
+});
+
+// ── Walkthrough Results ────────────────────────────────────────────────────────
+
+spacesRouter.get("/:id/walkthroughs/:walkthroughId/results", async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const results = await getWalkthroughResults(
+    db,
+    req.params.walkthroughId,
+    res.locals.tenantId,
+  );
+  if (!results || results.spaceId !== req.params.id) {
+    sendApiError(res, 404, "NOT_FOUND", "Walkthrough not found in this space");
+    return;
+  }
+
+  res.status(200).json(results);
+});
+
+spacesRouter.post("/:id/walkthroughs/:walkthroughId/results/bulk", requireUuidParams("id", "walkthroughId"), async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const observationIds: string[] = Array.isArray(req.body?.observationIds) ? req.body.observationIds : [];
+  const action = req.body?.action;
+
+  if (!Array.isArray(observationIds) || observationIds.length === 0) {
+    sendApiError(res, 400, "BAD_REQUEST", "observationIds array is required");
+    return;
+  }
+  if (action !== "accept" && action !== "mark_review") {
+    sendApiError(res, 400, "BAD_REQUEST", "action must be 'accept' or 'mark_review'");
+    return;
+  }
+
+  const result = await bulkProcessResults(db, {
+    walkthroughId: req.params.walkthroughId,
+    tenantId: res.locals.tenantId,
+    observationIds,
+    action,
+  });
+
+  if (!result) {
+    sendApiError(res, 404, "NOT_FOUND", "Walkthrough not found");
+    return;
+  }
+
+  res.status(200).json(result);
 });
 
 // ── Inventory ─────────────────────────────────────────────────────────────────

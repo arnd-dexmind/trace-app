@@ -376,4 +376,54 @@ export function updateRepairStatus(spaceId: string, issueId: string, status: str
   });
 }
 
+// ── Walkthrough Results ──────────────────────────────────────────────────
+
+export interface WalkthroughResultsSummary {
+  total: number;
+  new: number;
+  matched: number;
+  relocated: number;
+  missing: number;
+}
+
+export interface WalkthroughResultItem {
+  id: string;
+  label: string;
+  confidence: number | null;
+  resultStatus: "new" | "matched" | "relocated" | "missing";
+  category: string | null;
+  zoneName: string | null;
+  storageLocationName: string | null;
+  keyframeUrl: string | null;
+  itemId: string | null;
+  itemName: string | null;
+  previousZoneName: string | null;
+  frameRef: string | null;
+}
+
+export interface WalkthroughResults {
+  walkthroughId: string;
+  spaceId: string;
+  status: string;
+  summary: WalkthroughResultsSummary;
+  items: WalkthroughResultItem[];
+}
+
+export function getWalkthroughResults(spaceId: string, walkthroughId: string) {
+  return request<WalkthroughResults>(
+    `/api/spaces/${spaceId}/walkthroughs/${walkthroughId}/results`,
+  );
+}
+
+export function bulkProcessResults(
+  spaceId: string,
+  walkthroughId: string,
+  body: { observationIds: string[]; action: "accept" | "mark_review" },
+) {
+  return request<{ processed: number; action: string }>(
+    `/api/spaces/${spaceId}/walkthroughs/${walkthroughId}/results/bulk`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
 export { getTenantId, getSpaceId };

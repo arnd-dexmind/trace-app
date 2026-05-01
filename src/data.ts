@@ -784,6 +784,267 @@ export async function getAliasesForItems(
   return map;
 }
 
+// ── Walkthrough Results ────────────────────────────────────────────────────────
+
+export interface WalkthroughResults {
+  walkthroughId: string;
+  spaceId: string;
+  status: string;
+  summary: {
+    total: number;
+    new: number;
+    matched: number;
+    relocated: number;
+    missing: number;
+  };
+  items: WalkthroughResultItem[];
+}
+
+export interface WalkthroughResultItem {
+  id: string;
+  label: string;
+  confidence: number | null;
+  resultStatus: "new" | "matched" | "relocated" | "missing";
+  category: string | null;
+  zoneName: string | null;
+  storageLocationName: string | null;
+  keyframeUrl: string | null;
+  itemId: string | null;
+  itemName: string | null;
+  previousZoneName: string | null;
+  frameRef: string | null;
+}
+
+export async function getWalkthroughResults(
+  db: PrismaClient,
+  walkthroughId: string,
+  tenantId: string,
+): Promise<WalkthroughResults | null> {
+  const wt = await db.walkthrough.findUnique({
+    where: { id: walkthroughId },
+    select: { id: true, spaceId: true, status: true, tenantId: true, metadata: true },
+  });
+  if (!wt || wt.tenantId !== tenantId) return null;
+
+  const observations = await db.itemObservation.findMany({
+    where: { walkthroughId },
+    include: {
+      zone: { select: { id: true, name: true } },
+      storageLocation: { select: { id: true, name: true } },
+      item: { select: { id: true, name: true, category: true } },
+      identityLinks: {
+        include: {
+          item: { select: { id: true, name: true, category: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Collect item IDs linked to observations for location comparison
+  const linkedItemIds = new Set<string>();
+  for (const obs of observations) {
+    if (obs.itemId) linkedItemIds.add(obs.itemId);
+    for (const link of obs.identityLinks) {
+      linkedItemIds.add(link.itemId);
+    }
+  }
+
+  // Fetch last known location for each linked item (before this walkthrough)
+  const prevLocations = new Map<string, { zoneName: string | null }>();
+  if (linkedItemIds.size > 0) {
+    const history = await db.itemLocationHistory.findMany({
+      where: {
+        itemId: { in: [...linkedItemIds] },
+        sourceObservation: { walkthroughId: { not: walkthroughId } },
+      },
+      orderBy: { observedAt: "desc" },
+      include: { zone: { select: { name: true } } },
+    });
+    for (const h of history) {
+      if (!prevLocations.has(h.itemId)) {
+        prevLocations.set(h.itemId, { zoneName: h.zone?.name ?? null });
+      }
+    }
+  }
+
+  // Also check for items that were in previous walkthroughs but missing now
+  const prevWalkthrough = await db.walkthrough.findFirst({
+    where: { spaceId: wt.spaceId, tenantId, id: { not: walkthroughId } },
+    orderBy: { uploadedAt: "desc" },
+    select: { id: true },
+  });
+
+  let missingItems: WalkthroughResultItem[] = [];
+  if (prevWalkthrough) {
+    const prevObs = await db.itemObservation.findMany({
+      where: { walkthroughId: prevWalkthrough.id, itemId: { not: null } },
+      select: { itemId: true, item: { select: { id: true, name: true, category: true } }, zone: { select: { name: true } } },
+    });
+    const currentItemIds = new Set<string>();
+    for (const obs of observations) {
+      if (obs.itemId) currentItemIds.add(obs.itemId);
+      for (const link of obs.identityLinks) currentItemIds.add(link.itemId);
+    }
+
+    const seen = new Set<string>();
+    for (const po of prevObs) {
+      if (!po.itemId || currentItemIds.has(po.itemId) || seen.has(po.itemId)) continue;
+      seen.add(po.itemId);
+      missingItems.push({
+        id: `missing-${po.itemId}`,
+        label: po.item?.name ?? "Unknown Item",
+        confidence: null,
+        resultStatus: "missing",
+        category: po.item?.category ?? null,
+        zoneName: po.zone?.name ?? null,
+        storageLocationName: null,
+        keyframeUrl: null,
+        itemId: po.itemId,
+        itemName: po.item?.name ?? null,
+        previousZoneName: po.zone?.name ?? null,
+        frameRef: null,
+      });
+    }
+  }
+
+  const items: WalkthroughResultItem[] = observations.map((obs) => {
+    const effectiveItemId = obs.itemId ?? obs.identityLinks[0]?.itemId ?? null;
+    const effectiveItemName = obs.item?.name ?? obs.identityLinks[0]?.item.name ?? null;
+    const effectiveCategory = obs.item?.category ?? obs.identityLinks[0]?.item.category ?? null;
+    const prevLoc = effectiveItemId ? prevLocations.get(effectiveItemId) : null;
+    const currentZone = obs.zone?.name ?? null;
+
+    let resultStatus: WalkthroughResultItem["resultStatus"] = "new";
+    if (effectiveItemId) {
+      if (prevLoc && currentZone && prevLoc.zoneName !== currentZone) {
+        resultStatus = "relocated";
+      } else {
+        resultStatus = "matched";
+      }
+    }
+
+    const frameRef = extractFrameRef(obs.keyframeUrl);
+
+    return {
+      id: obs.id,
+      label: obs.label,
+      confidence: obs.confidence,
+      resultStatus,
+      category: effectiveCategory,
+      zoneName: currentZone,
+      storageLocationName: obs.storageLocation?.name ?? null,
+      keyframeUrl: obs.keyframeUrl,
+      itemId: effectiveItemId,
+      itemName: effectiveItemName,
+      previousZoneName: prevLoc?.zoneName ?? null,
+      frameRef,
+    };
+  });
+
+  // Fallback: if no observations and no missing items, return stub data for dev UX
+  const allItems = [...items, ...missingItems];
+
+  if (allItems.length === 0) {
+    // Return empty results rather than null — the page handles empty state
+    return {
+      walkthroughId: wt.id,
+      spaceId: wt.spaceId,
+      status: wt.status,
+      summary: { total: 0, new: 0, matched: 0, relocated: 0, missing: 0 },
+      items: [],
+    };
+  }
+
+  const summary = {
+    total: allItems.length,
+    new: allItems.filter((i) => i.resultStatus === "new").length,
+    matched: allItems.filter((i) => i.resultStatus === "matched").length,
+    relocated: allItems.filter((i) => i.resultStatus === "relocated").length,
+    missing: allItems.filter((i) => i.resultStatus === "missing").length,
+  };
+
+  return { walkthroughId: wt.id, spaceId: wt.spaceId, status: wt.status, summary, items: allItems };
+}
+
+function extractFrameRef(keyframeUrl: string | null): string | null {
+  if (!keyframeUrl) return null;
+  const match = keyframeUrl.match(/frame[_-]?(\d+)/i);
+  if (match) {
+    const frameNum = parseInt(match[1], 10);
+    const totalSecs = Math.floor(frameNum / 30);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `Frame ${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}:${String(frameNum % 30).padStart(2, "0")}`;
+  }
+  return null;
+}
+
+export async function bulkProcessResults(
+  db: PrismaClient,
+  params: {
+    walkthroughId: string;
+    tenantId: string;
+    observationIds: string[];
+    action: "accept" | "mark_review";
+  },
+) {
+  const wt = await db.walkthrough.findUnique({ where: { id: params.walkthroughId } });
+  if (!wt || wt.tenantId !== params.tenantId) return null;
+
+  const newStatus = params.action === "accept" ? "accepted" : "pending";
+
+  await db.itemObservation.updateMany({
+    where: { id: { in: params.observationIds }, walkthroughId: params.walkthroughId },
+    data: { status: newStatus },
+  });
+
+  // If accepting, also create identity links and location history for unlinked items
+  if (params.action === "accept") {
+    const observations = await db.itemObservation.findMany({
+      where: { id: { in: params.observationIds }, itemId: null },
+    });
+
+    for (const obs of observations) {
+      // Create a new inventory item for unlinked observations
+      const newItem = await db.inventoryItem.create({
+        data: {
+          spaceId: wt.spaceId,
+          tenantId: params.tenantId,
+          name: obs.label,
+        },
+      });
+
+      await db.itemIdentityLink.create({
+        data: {
+          observationId: obs.id,
+          itemId: newItem.id,
+          tenantId: params.tenantId,
+          matchConfidence: obs.confidence,
+        },
+      });
+
+      await db.itemLocationHistory.create({
+        data: {
+          itemId: newItem.id,
+          tenantId: params.tenantId,
+          zoneId: obs.zoneId,
+          storageLocationId: obs.storageLocationId,
+          sourceObservationId: obs.id,
+          observedAt: new Date(),
+        },
+      });
+
+      await db.itemObservation.update({
+        where: { id: obs.id },
+        data: { itemId: newItem.id },
+      });
+    }
+  }
+
+  return { processed: params.observationIds.length, action: params.action };
+}
+
 // ── Review ────────────────────────────────────────────────────────────────────
 
 export async function listReviewQueue(

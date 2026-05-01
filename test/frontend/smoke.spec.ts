@@ -267,3 +267,154 @@ test("capture page is reachable from nav", async ({ page }) => {
   const spaceSelector = page.locator('select[aria-label="Select space"]');
   await expect(spaceSelector).toBeVisible();
 });
+
+test("results page renders with empty state when no observations exist", async ({ page }) => {
+  // Create a walkthrough in the current space
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  await page.goto(`/results/${walkthrough.id}`);
+  await page.waitForLoadState("networkidle");
+
+  // Should show breadcrumb and header
+  await expect(page.getByText("Walkthrough Results")).toBeVisible();
+
+  // Empty state — no items detected
+  await expect(page.getByText("No Items Detected")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Upload Another Walkthrough" })).toBeVisible();
+});
+
+test("results page renders stats grid and item cards with observations", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  // Create walkthrough
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  // Ingest some observations to simulate AI processing
+  await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [
+        { label: "Binder - Blue 3-Ring", confidence: 96 },
+        { label: "Fire Extinguisher #FE-042", confidence: 94 },
+        { label: "Unknown Metal Object", confidence: 41 },
+      ],
+    },
+  });
+
+  await page.goto(`/results/${walkthrough.id}`);
+  await page.waitForLoadState("networkidle");
+
+  // Stats grid should be visible with summary counts
+  await expect(page.getByText("Total Items")).toBeVisible();
+  await expect(page.getByText("New")).toBeVisible();
+  await expect(page.getByText("Matched")).toBeVisible();
+
+  // Item cards should appear
+  await expect(page.getByText("Binder - Blue 3-Ring")).toBeVisible();
+  await expect(page.getByText("Fire Extinguisher #FE-042")).toBeVisible();
+  await expect(page.getByText("Unknown Metal Object")).toBeVisible();
+
+  // Confidence badges should show
+  await expect(page.getByText("96%")).toBeVisible();
+  await expect(page.getByText("94%")).toBeVisible();
+  await expect(page.getByText("41%")).toBeVisible();
+
+  // Status badges should appear (all "New" for unlinked items)
+  await expect(page.getByText("New").first()).toBeVisible();
+
+  // Keyboard hints should be present
+  await expect(page.getByText("navigate")).toBeVisible();
+});
+
+test("results page stat cards filter list on click", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [
+        { label: "Test Item Alpha", confidence: 90 },
+        { label: "Test Item Beta", confidence: 60 },
+      ],
+    },
+  });
+
+  await page.goto(`/results/${walkthrough.id}`);
+  await page.waitForLoadState("networkidle");
+
+  // Both items visible initially
+  await expect(page.getByText("Test Item Alpha")).toBeVisible();
+  await expect(page.getByText("Test Item Beta")).toBeVisible();
+
+  // Click "New" stat card to filter
+  const statNew = page.getByRole("button", { name: /New:/ });
+  await statNew.click();
+
+  // Both should still be visible (both are "new" status items)
+  await expect(page.getByText("Test Item Alpha")).toBeVisible();
+  await expect(page.getByText("Test Item Beta")).toBeVisible();
+
+  // Click "Matched" stat card — should filter to empty
+  const statMatched = page.getByRole("button", { name: /Matched:/ });
+  await statMatched.click();
+
+  // Should show filtered-empty state
+  await expect(page.getByText("No Matching Items")).toBeVisible();
+
+  // Clear filters and items should reappear
+  await page.getByRole("button", { name: "Clear All Filters" }).click();
+  await expect(page.getByText("Test Item Alpha")).toBeVisible();
+});
+
+test("results page renders on mobile viewport", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [{ label: "Mobile Test Item", confidence: 85 }],
+    },
+  });
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/results/${walkthrough.id}`);
+  await page.waitForLoadState("networkidle");
+
+  // Header and breadcrumb should still be visible
+  await expect(page.getByText("Walkthrough Results")).toBeVisible();
+
+  // Item card should be visible
+  await expect(page.getByText("Mobile Test Item")).toBeVisible();
+
+  // Nav should be reachable
+  await expect(page.getByRole("link", { name: "Capture" })).toBeVisible();
+});

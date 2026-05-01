@@ -8,6 +8,7 @@ import { RepairList } from "./pages/RepairList";
 import { RepairDetail } from "./pages/RepairDetail";
 import { Upload } from "./pages/Upload";
 import { Capture } from "./pages/Capture";
+import { Results } from "./pages/Results";
 import { Spaces } from "./pages/Spaces";
 
 export function App() {
@@ -24,6 +25,7 @@ export function App() {
         <Route path="/repairs/:repairId" element={<RepairDetail />} />
         <Route path="/upload" element={<Upload />} />
         <Route path="/capture" element={<Capture />} />
+        <Route path="/results/:walkthroughId" element={<Results />} />
       </Routes>
     </BrowserRouter>
   );
