@@ -922,7 +922,7 @@ test("POST /api/review/:taskId/actions returns 404 for non-existent task", async
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("unexpected address");
 
-    const res = await fetch(url(address.port, "/api/review/nonexistent/actions"), {
+    const res = await fetch(url(address.port, "/api/review/00000000-0000-0000-0000-000000000000/actions"), {
       method: "POST",
       headers: headers("tenant-a"),
       body: JSON.stringify({ actionType: "accept", observationId: "any" }),
@@ -1281,7 +1281,7 @@ test("PATCH repair returns 404 for non-existent repair", async () => {
 
     const space = await createTestSpace(address.port);
     const res = await fetch(
-      url(address.port, `/api/spaces/${space.id}/repairs/nonexistent`),
+      url(address.port, `/api/spaces/${space.id}/repairs/00000000-0000-0000-0000-000000000000`),
       {
         method: "PATCH",
         headers: headers("tenant-a"),
