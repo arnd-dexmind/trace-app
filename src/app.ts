@@ -2,13 +2,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { ApiError, createRequestId, sendApiError, requireTenant } from "./lib/errors.js";
+import { clerkMiddleware } from "@clerk/express";
+import { ApiError, createRequestId, sendApiError } from "./lib/errors.js";
+import { createAuthMiddleware } from "./lib/auth.js";
 import { db } from "./lib/db.js";
-import { upload, UPLOADS_DIR } from "./lib/upload.js";
+import { upload, handleUpload, generateStorageKey, storageProvider } from "./lib/upload.js";
+import { UPLOADS_DIR } from "./lib/storage.js";
 import { getMediaAsset } from "./data.js";
 import multer from "multer";
 import { spacesRouter } from "./routes/spaces.js";
 import { reviewRouter } from "./routes/review.js";
+import { processingRouter } from "./routes/processing.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = join(__dirname, "..", "client", "dist");
@@ -23,14 +27,14 @@ function renderPage() {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Space Memory</title>
+    <title>PerifEye</title>
     <style>
       body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 2rem; max-width: 52rem; }
       .muted { color: #666; }
     </style>
   </head>
   <body>
-    <h1>Space Memory</h1>
+    <h1>PerifEye</h1>
     <p class="muted">API available at /api/spaces and /api/review</p>
   </body>
 </html>`;
@@ -63,6 +67,13 @@ export function createApp() {
 
   app.use(express.json({ limit: "1mb" }));
 
+  const clerkEnabled = Boolean(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY);
+  if (clerkEnabled) {
+    app.use(clerkMiddleware());
+  }
+
+  const requireAuth = createAuthMiddleware();
+
   app.get("/", (_req, res) => {
     res.type("html").send(renderPage());
   });
@@ -76,7 +87,7 @@ export function createApp() {
     }
   });
 
-  app.get("/api/media-assets/:id", requireTenant, async (req, res) => {
+  app.get("/api/media-assets/:id", requireAuth, async (req, res) => {
     const asset = await getMediaAsset(db, req.params.id, res.locals.tenantId);
     if (!asset) {
       sendApiError(res, 404, "NOT_FOUND", "Media asset not found");
@@ -85,31 +96,76 @@ export function createApp() {
     res.status(200).json(asset);
   });
 
-  app.use("/uploads", express.static(UPLOADS_DIR));
+  // Static uploads only for local storage
+  if (!process.env.S3_BUCKET) {
+    app.use("/uploads", express.static(UPLOADS_DIR));
+  }
 
-  app.post("/api/uploads", requireTenant, upload.single("file"), (req, res) => {
+  app.post("/api/uploads", requireAuth, upload.single("file"), async (req, res) => {
     if (!req.file) {
       sendApiError(res, 400, "BAD_REQUEST", "No file provided");
       return;
     }
-    res.status(201).json({
-      url: `/uploads/${req.file.filename}`,
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-    });
+    try {
+      const stored = await handleUpload(req.file, "uploads");
+      res.status(201).json({
+        url: stored.url,
+        key: stored.key,
+        size: stored.size,
+        mimetype: stored.mimetype,
+      });
+    } catch (err) {
+      console.error(JSON.stringify({
+        level: "error",
+        requestId: res.locals.requestId,
+        message: "Upload failed",
+        detail: err instanceof Error ? err.message : String(err),
+      }));
+      sendApiError(res, 500, "INTERNAL_ERROR", "Upload failed");
+    }
+  });
+
+  app.post("/api/uploads/sign", requireAuth, async (req, res) => {
+    const originalName = typeof req.body?.originalName === "string" ? req.body.originalName.trim() : "";
+    const mimetype = typeof req.body?.mimetype === "string" ? req.body.mimetype.trim() : "";
+    if (!originalName || !mimetype) {
+      sendApiError(res, 400, "BAD_REQUEST", "originalName and mimetype are required");
+      return;
+    }
+    if (!mimetype.startsWith("image/") && !mimetype.startsWith("video/")) {
+      sendApiError(res, 400, "BAD_REQUEST", "Only image and video mimetypes are allowed");
+      return;
+    }
+
+    try {
+      const key = generateStorageKey("uploads", originalName);
+      const signedUrl = await storageProvider.getSignedUploadUrl({ key, mimetype });
+      res.status(201).json({ signedUrl, key });
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("not supported")) {
+        sendApiError(res, 501, "NOT_IMPLEMENTED", "Signed uploads not available with local storage");
+        return;
+      }
+      console.error(JSON.stringify({
+        level: "error",
+        requestId: res.locals.requestId,
+        message: "Signed URL generation failed",
+        detail: err instanceof Error ? err.message : String(err),
+      }));
+      sendApiError(res, 500, "INTERNAL_ERROR", "Failed to generate signed URL");
+    }
   });
 
   app.use("/api/spaces", spacesRouter);
   app.use("/api/review", reviewRouter);
+  app.use("/api/processing", processingRouter);
 
   // Serve React SPA in production
   if (existsSync(CLIENT_DIST)) {
     app.use(express.static(CLIENT_DIST));
 
     // SPA fallback for client-side routes
-    const spaRoutes = ["/review", "/items", "/repairs"];
+    const spaRoutes = ["/review", "/items", "/repairs", "/upload", "/dashboard"];
     for (const route of spaRoutes) {
       app.get(route, (_req, res) => {
         res.type("html").send(renderPage());

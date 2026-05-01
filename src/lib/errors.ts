@@ -1,6 +1,6 @@
-import type { Request, Response, NextFunction } from "express";
+import type { Response } from "express";
 
-export type ApiErrorCode = "BAD_REQUEST" | "NOT_FOUND" | "INTERNAL_ERROR";
+export type ApiErrorCode = "BAD_REQUEST" | "NOT_FOUND" | "CONFLICT" | "NOT_IMPLEMENTED" | "INTERNAL_ERROR";
 
 export class ApiError extends Error {
   status: number;
@@ -30,21 +30,4 @@ export function sendApiError(
       requestId: String(res.locals.requestId || ""),
     },
   });
-}
-
-export function parseTenantId(raw: string | undefined) {
-  const value = (raw || "").trim();
-  if (!value) return null;
-  if (!/^[a-zA-Z0-9_-]{2,64}$/.test(value)) return null;
-  return value;
-}
-
-export function requireTenant(req: Request, res: Response, next: NextFunction) {
-  const tenantId = parseTenantId(req.header("x-tenant-id"));
-  if (!tenantId) {
-    sendApiError(res, 400, "BAD_REQUEST", "x-tenant-id header is required");
-    return;
-  }
-  res.locals.tenantId = tenantId;
-  next();
 }

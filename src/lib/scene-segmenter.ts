@@ -119,6 +119,8 @@ export function pickRepresentativeFrames(
 
 /**
  * Load keyframes for a walkthrough and return scene bundles.
+ * Prefers frame metadata persisted by the frame_extraction stage
+ * (which includes sceneScore and timestamps from ffmpeg).
  */
 export async function buildSceneBundles(
   db: PrismaClient,
@@ -133,13 +135,34 @@ export async function buildSceneBundles(
     return [];
   }
 
-  const frames: ExtractedFrame[] = keyframes.map((kf, i) => ({
-    path: "", // path not needed once persisted
-    url: kf.url,
-    timestamp: i,
-    sceneScore: 0,
-    assetId: kf.id,
-  }));
+  // Try to load frame metadata persisted by frame_extraction stage
+  const wt = await db.walkthrough.findUnique({
+    where: { id: walkthroughId },
+    select: { metadata: true },
+  });
+  const meta = wt?.metadata ? JSON.parse(String(wt.metadata)) : {};
+  const persistedFrames: Record<string, { timestamp: number | null; sceneScore: number }> = {};
+  if (Array.isArray(meta.extractedFrames)) {
+    for (const f of meta.extractedFrames) {
+      if (f.url) {
+        persistedFrames[f.url] = {
+          timestamp: f.timestamp ?? null,
+          sceneScore: f.sceneScore ?? 0,
+        };
+      }
+    }
+  }
+
+  const frames: ExtractedFrame[] = keyframes.map((kf, i) => {
+    const persisted = persistedFrames[kf.url];
+    return {
+      path: "",
+      url: kf.url,
+      timestamp: persisted?.timestamp ?? i,
+      sceneScore: persisted?.sceneScore ?? 0,
+      assetId: kf.id,
+    };
+  });
 
   return segmentScenes(frames);
 }

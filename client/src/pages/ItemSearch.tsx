@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { searchItems, type InventoryItem, getSpaceId } from "../api";
+import { EmptyState } from "../components/ui/EmptyState";
 
 export function ItemSearch() {
   const spaceId = getSpaceId();
@@ -55,10 +56,11 @@ export function ItemSearch() {
   if (!spaceId) {
     return (
       <div style={shell}>
-        <div style={emptyState}>
-          <div style={{ fontSize: 48, marginBottom: "var(--sm-space-4)" }}>&#128269;</div>
-          <p>Select a space to search items.</p>
-        </div>
+        <EmptyState
+          icon="&#128269;"
+          title="No space selected"
+          description="Select a space to search its inventory."
+        />
       </div>
     );
   }
@@ -93,10 +95,13 @@ export function ItemSearch() {
                 }}
               >
                 <div style={acIcon}>&#128736;</div>
-                <div>
-                  <div style={{ fontSize: "var(--sm-text-sm)" }}>{item.name}</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: "var(--sm-text-sm)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</div>
                   <div style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)" }}>
-                    {item.category || "Uncategorized"} &middot; Qty: {item.quantity}
+                    {item.category || "Uncategorized"}
+                    {item.latestLocation && (
+                      <> &middot; Last seen {new Date(item.latestLocation.observedAt).toLocaleDateString()}</>
+                    )}
                   </div>
                 </div>
               </div>
@@ -128,10 +133,18 @@ export function ItemSearch() {
               <div style={{ fontSize: "var(--sm-text-base)", fontWeight: 600, marginBottom: 2 }}>
                 {item.name}
               </div>
-              <div style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)", display: "flex", gap: "var(--sm-space-3)", flexWrap: "wrap" }}>
+              <div style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)", display: "flex", gap: "var(--sm-space-3)", flexWrap: "wrap", alignItems: "center" }}>
                 {item.category && <span style={chip}>{item.category}</span>}
-                <span>Qty: {item.quantity}</span>
-                <span>Created {new Date(item.createdAt).toLocaleDateString()}</span>
+                {item.latestLocation ? (
+                  <>
+                    <span>
+                      &#128205; {item.latestLocation.zone?.name || item.latestLocation.storageLocation?.name || "Unknown"}
+                    </span>
+                    <span>{new Date(item.latestLocation.observedAt).toLocaleDateString()}</span>
+                  </>
+                ) : (
+                  <span>Never seen</span>
+                )}
               </div>
             </div>
             <span style={{ color: "var(--sm-text-tertiary)", fontSize: 20, flexShrink: 0 }}>&#8594;</span>
@@ -139,10 +152,11 @@ export function ItemSearch() {
         ))}
 
         {results.length === 0 && (
-          <div style={emptyState}>
-            <div style={{ fontSize: 48, marginBottom: "var(--sm-space-4)" }}>&#128269;</div>
-            <p>No items found. Try a different search.</p>
-          </div>
+          <EmptyState
+            icon="&#128269;"
+            title="No items found"
+            description="Try a different search term or check that inventory has been added for this space."
+          />
         )}
       </div>
     </div>
@@ -207,10 +221,6 @@ const chip: React.CSSProperties = {
 const resultsHeader: React.CSSProperties = {
   display: "flex", justifyContent: "space-between", alignItems: "center",
   marginBottom: "var(--sm-space-4)", flexWrap: "wrap", gap: "var(--sm-space-2)",
-};
-
-const emptyState: React.CSSProperties = {
-  textAlign: "center", padding: "var(--sm-space-16) var(--sm-space-4)", color: "var(--sm-text-tertiary)",
 };
 
 const errorBanner: React.CSSProperties = {

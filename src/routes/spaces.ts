@@ -1,11 +1,16 @@
 import { Router } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { db } from "../lib/db.js";
 import { sendApiError } from "../lib/errors.js";
 import { createAuthMiddleware } from "../lib/auth.js";
+import { isUuid } from "../lib/validation.js";
+import type { PaginatedResult } from "../data.js";
 import {
   createSpace,
   getSpace,
   listSpaces,
+  updateSpace,
+  deleteSpace,
   createWalkthrough,
   listWalkthroughs,
   getWalkthrough,
@@ -33,6 +38,28 @@ export const spacesRouter = Router();
 
 spacesRouter.use(createAuthMiddleware());
 
+function respondPaginated<T>(res: Response, result: PaginatedResult<T>, req: Request) {
+  const hasPagination = "cursor" in req.query || "limit" in req.query;
+  if (hasPagination) {
+    res.status(200).json(result);
+  } else {
+    res.status(200).json(result.data);
+  }
+}
+
+function requireUuidParams(...names: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    for (const name of names) {
+      const val = req.params[name];
+      if (val && !isUuid(val)) {
+        sendApiError(res, 400, "BAD_REQUEST", `Invalid ${name} format`);
+        return;
+      }
+    }
+    next();
+  };
+}
+
 // ── Spaces ────────────────────────────────────────────────────────────────────
 
 spacesRouter.post("/", async (req, res) => {
@@ -54,8 +81,10 @@ spacesRouter.post("/", async (req, res) => {
 });
 
 spacesRouter.get("/", async (req, res) => {
-  const spaces = await listSpaces(db, res.locals.tenantId);
-  res.status(200).json(spaces);
+  const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+  const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : undefined;
+  const result = await listSpaces(db, res.locals.tenantId, cursor, limit);
+  respondPaginated(res, result, req);
 });
 
 spacesRouter.get("/:id", async (req, res) => {
@@ -67,9 +96,39 @@ spacesRouter.get("/:id", async (req, res) => {
   res.status(200).json(space);
 });
 
+spacesRouter.patch("/:id", requireUuidParams("id"), async (req, res) => {
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : undefined;
+  const description =
+    typeof req.body?.description === "string" ? req.body.description : undefined;
+
+  if (name === "" && description === undefined) {
+    sendApiError(res, 400, "BAD_REQUEST", "name must not be empty");
+    return;
+  }
+
+  const space = await updateSpace(db, req.params.id, res.locals.tenantId, {
+    name,
+    description,
+  });
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+  res.status(200).json(space);
+});
+
+spacesRouter.delete("/:id", requireUuidParams("id"), async (req, res) => {
+  const result = await deleteSpace(db, req.params.id, res.locals.tenantId);
+  if (!result) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+  res.status(200).json(result);
+});
+
 // ── Walkthroughs ──────────────────────────────────────────────────────────────
 
-spacesRouter.post("/:id/walkthroughs", async (req, res) => {
+spacesRouter.post("/:id/walkthroughs", requireUuidParams("id"), async (req, res) => {
   const space = await getSpace(db, req.params.id, res.locals.tenantId);
   if (!space) {
     sendApiError(res, 404, "NOT_FOUND", "Space not found");
@@ -93,12 +152,16 @@ spacesRouter.get("/:id/walkthroughs", async (req, res) => {
     return;
   }
 
-  const walkthroughs = await listWalkthroughs(
+  const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+  const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : undefined;
+  const result = await listWalkthroughs(
     db,
     req.params.id,
     res.locals.tenantId,
+    cursor,
+    limit,
   );
-  res.status(200).json(walkthroughs);
+  respondPaginated(res, result, req);
 });
 
 spacesRouter.get("/:id/walkthroughs/:walkthroughId", async (req, res) => {
@@ -153,7 +216,7 @@ spacesRouter.get("/:id/walkthroughs/:walkthroughId/diff", async (req, res) => {
   res.status(200).json(diff);
 });
 
-spacesRouter.post("/:id/walkthroughs/:walkthroughId/process", async (req, res) => {
+spacesRouter.post("/:id/walkthroughs/:walkthroughId/process", requireUuidParams("id", "walkthroughId"), async (req, res) => {
   void req.body;
   const result = await startProcessing(
     db,
@@ -184,13 +247,17 @@ spacesRouter.get("/:id/inventory", async (req, res) => {
   const zoneId =
     typeof req.query.zoneId === "string" ? req.query.zoneId : undefined;
 
-  const items = await searchItems(db, {
+  const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+  const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : undefined;
+  const result = await searchItems(db, {
     spaceId: req.params.id,
     tenantId: res.locals.tenantId,
     name,
     zoneId,
+    cursor,
+    limit,
   });
-  res.status(200).json(items);
+  respondPaginated(res, result, req);
 });
 
 spacesRouter.get("/:id/inventory/:itemId", async (req, res) => {
@@ -220,11 +287,13 @@ spacesRouter.get("/:id/inventory/:itemId/aliases", async (req, res) => {
     sendApiError(res, 404, "NOT_FOUND", "Item not found");
     return;
   }
-  const aliases = await listAliases(db, req.params.itemId, res.locals.tenantId);
-  res.status(200).json(aliases);
+  const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+  const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : undefined;
+  const result = await listAliases(db, req.params.itemId, res.locals.tenantId, cursor, limit);
+  respondPaginated(res, result, req);
 });
 
-spacesRouter.post("/:id/inventory/:itemId/aliases", async (req, res) => {
+spacesRouter.post("/:id/inventory/:itemId/aliases", requireUuidParams("id", "itemId"), async (req, res) => {
   const item = await getItem(
     db,
     req.params.itemId,
@@ -263,14 +332,14 @@ spacesRouter.post("/:id/inventory/:itemId/aliases", async (req, res) => {
       "code" in err &&
       (err as Record<string, unknown>).code === "P2002"
     ) {
-      sendApiError(res, 409, "BAD_REQUEST", "Alias already exists for this item");
+      sendApiError(res, 409, "CONFLICT", "Alias already exists for this item");
       return;
     }
     throw err;
   }
 });
 
-spacesRouter.delete("/:id/inventory/:itemId/aliases/:aliasId", async (req, res) => {
+spacesRouter.delete("/:id/inventory/:itemId/aliases/:aliasId", requireUuidParams("id", "itemId", "aliasId"), async (req, res) => {
   const item = await getItem(
     db,
     req.params.itemId,
@@ -308,15 +377,19 @@ spacesRouter.get("/:id/repairs", async (req, res) => {
   const status =
     typeof req.query.status === "string" ? req.query.status : undefined;
 
-  const repairs = await listRepairs(db, {
+  const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+  const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : undefined;
+  const result = await listRepairs(db, {
     spaceId: req.params.id,
     tenantId: res.locals.tenantId,
     status,
+    cursor,
+    limit,
   });
-  res.status(200).json(repairs);
+  respondPaginated(res, result, req);
 });
 
-spacesRouter.post("/:id/repairs", async (req, res) => {
+spacesRouter.post("/:id/repairs", requireUuidParams("id"), async (req, res) => {
   const space = await getSpace(db, req.params.id, res.locals.tenantId);
   if (!space) {
     sendApiError(res, 404, "NOT_FOUND", "Space not found");
@@ -358,7 +431,7 @@ spacesRouter.get("/:id/repairs/:issueId", async (req, res) => {
   res.status(200).json(repair);
 });
 
-spacesRouter.patch("/:id/repairs/:issueId", async (req, res) => {
+spacesRouter.patch("/:id/repairs/:issueId", requireUuidParams("id", "issueId"), async (req, res) => {
   const status = typeof req.body?.status === "string" ? req.body.status : "";
   if (!["open", "in_progress", "resolved"].includes(status)) {
     sendApiError(res, 400, "BAD_REQUEST", "status must be open, in_progress, or resolved");
@@ -381,7 +454,7 @@ spacesRouter.patch("/:id/repairs/:issueId", async (req, res) => {
 
 // ── Observations ──────────────────────────────────────────────────────────────
 
-spacesRouter.post("/:id/observations", async (req, res) => {
+spacesRouter.post("/:id/observations", requireUuidParams("id"), async (req, res) => {
   const space = await getSpace(db, req.params.id, res.locals.tenantId);
   if (!space) {
     sendApiError(res, 404, "NOT_FOUND", "Space not found");
@@ -412,7 +485,7 @@ spacesRouter.post("/:id/observations", async (req, res) => {
 
 // ── Zones ──────────────────────────────────────────────────────────────────────
 
-spacesRouter.post("/:id/zones", async (req, res) => {
+spacesRouter.post("/:id/zones", requireUuidParams("id"), async (req, res) => {
   const space = await getSpace(db, req.params.id, res.locals.tenantId);
   if (!space) {
     sendApiError(res, 404, "NOT_FOUND", "Space not found");
@@ -444,13 +517,15 @@ spacesRouter.get("/:id/zones", async (req, res) => {
     return;
   }
 
-  const zones = await listZones(db, req.params.id, res.locals.tenantId);
-  res.status(200).json(zones);
+  const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+  const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : undefined;
+  const result = await listZones(db, req.params.id, res.locals.tenantId, cursor, limit);
+  respondPaginated(res, result, req);
 });
 
 // ── Storage Locations ──────────────────────────────────────────────────────────
 
-spacesRouter.post("/:id/storage-locations", async (req, res) => {
+spacesRouter.post("/:id/storage-locations", requireUuidParams("id"), async (req, res) => {
   const space = await getSpace(db, req.params.id, res.locals.tenantId);
   if (!space) {
     sendApiError(res, 404, "NOT_FOUND", "Space not found");
@@ -486,17 +561,21 @@ spacesRouter.get("/:id/storage-locations", async (req, res) => {
     return;
   }
 
-  const locations = await listStorageLocations(
+  const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+  const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : undefined;
+  const result = await listStorageLocations(
     db,
     req.params.id,
     res.locals.tenantId,
+    cursor,
+    limit,
   );
-  res.status(200).json(locations);
+  respondPaginated(res, result, req);
 });
 
 // ── Media Registration ─────────────────────────────────────────────────────────
 
-spacesRouter.post("/:id/walkthroughs/:wid/media", async (req, res) => {
+spacesRouter.post("/:id/walkthroughs/:wid/media", requireUuidParams("id", "wid"), async (req, res) => {
   const space = await getSpace(db, req.params.id, res.locals.tenantId);
   if (!space) {
     sendApiError(res, 404, "NOT_FOUND", "Space not found");

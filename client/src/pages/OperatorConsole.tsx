@@ -1,11 +1,13 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   listReviewQueue,
   getReviewTask,
   processAction,
+  searchItems,
   type ReviewTask,
   type ItemObservation,
   type RepairObservation,
+  type InventoryItem,
 } from "../api";
 
 type TabId = "pending" | "completed";
@@ -15,8 +17,15 @@ export function OperatorConsole() {
   const [activeTab, setActiveTab] = useState<TabId>("pending");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReviewTask | null>(null);
+  const [selectedObsIndex, setSelectedObsIndex] = useState(0);
+  const [batchSelection, setBatchSelection] = useState<Set<string>>(new Set());
   const [actionsOpen, setActionsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mergeOpen, setMergeOpen] = useState<string | null>(null); // obsId of merge target
+  const [mergeQuery, setMergeQuery] = useState("");
+  const [mergeResults, setMergeResults] = useState<InventoryItem[]>([]);
+  const [relabelingId, setRelabelingId] = useState<string | null>(null);
+  const [relabelValue, setRelabelValue] = useState("");
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -35,12 +44,37 @@ export function OperatorConsole() {
   useEffect(() => {
     if (!selectedId) {
       setDetail(null);
+      setSelectedObsIndex(0);
+      setBatchSelection(new Set());
       return;
     }
+    setSelectedObsIndex(0);
+    setBatchSelection(new Set());
     getReviewTask(selectedId)
       .then(setDetail)
       .catch(() => setDetail(null));
   }, [selectedId]);
+
+  // Merge search debounce
+  const mergeTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    if (!mergeOpen || !detail) return;
+    if (!mergeQuery.trim()) {
+      setMergeResults([]);
+      return;
+    }
+    const spaceId = detail.walkthrough.spaceId;
+    clearTimeout(mergeTimer.current);
+    mergeTimer.current = setTimeout(async () => {
+      try {
+        const items = await searchItems(spaceId, mergeQuery.trim());
+        setMergeResults(items);
+      } catch {
+        setMergeResults([]);
+      }
+    }, 250);
+    return () => clearTimeout(mergeTimer.current);
+  }, [mergeQuery, mergeOpen, detail]);
 
   const handleAction = async (actionType: string, observationId?: string, extra?: Record<string, string>) => {
     if (!selectedId) return;
@@ -55,6 +89,52 @@ export function OperatorConsole() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Action failed");
     }
+  };
+
+  const toggleBatch = (obsId: string) => {
+    setBatchSelection((prev) => {
+      const next = new Set(prev);
+      if (next.has(obsId)) next.delete(obsId);
+      else next.add(obsId);
+      return next;
+    });
+  };
+
+  const handleBatchAccept = async () => {
+    if (!selectedId || batchSelection.size === 0) return;
+    setError(null);
+    let firstError: string | null = null;
+    for (const obsId of batchSelection) {
+      try {
+        await processAction(selectedId, { actionType: "accept", observationId: obsId });
+      } catch (e) {
+        firstError = e instanceof Error ? e.message : "Batch accept failed";
+      }
+    }
+    setBatchSelection(new Set());
+    fetchTasks();
+    if (detail) {
+      const updated = await getReviewTask(selectedId);
+      setDetail(updated);
+    }
+    if (firstError) setError(firstError);
+  };
+
+  const handleMerge = async (obsId: string, targetItemId: string) => {
+    await handleAction("merge", obsId, { itemId: targetItemId });
+    setMergeOpen(null);
+    setMergeQuery("");
+    setMergeResults([]);
+  };
+
+  const handleRelabel = async (obsId: string) => {
+    if (!relabelValue.trim()) {
+      setRelabelingId(null);
+      return;
+    }
+    await handleAction("relabel", obsId, { newLabel: relabelValue.trim() });
+    setRelabelingId(null);
+    setRelabelValue("");
   };
 
   const pendingCount = tasks.filter((t) => t.status === "pending").length;
@@ -151,8 +231,19 @@ export function OperatorConsole() {
         ) : (
           <DetailView
             detail={detail}
+            selectedObsIndex={selectedObsIndex}
+            setSelectedObsIndex={setSelectedObsIndex}
             onAction={handleAction}
+            onMergeOpen={(obsId) => setMergeOpen(obsId)}
+            batchSelection={batchSelection}
+            onToggleBatch={toggleBatch}
             selectedId={selectedId!}
+            relabelingId={relabelingId}
+            relabelValue={relabelValue}
+            onRelabelStart={(obsId, currentLabel) => { setRelabelingId(obsId); setRelabelValue(currentLabel); }}
+            onRelabelChange={setRelabelValue}
+            onRelabelSave={handleRelabel}
+            onRelabelCancel={() => { setRelabelingId(null); setRelabelValue(""); }}
           />
         )}
       </main>
@@ -168,8 +259,68 @@ export function OperatorConsole() {
         <ActionsView
           detail={detail}
           onAction={handleAction}
+          batchSelection={batchSelection}
+          onToggleBatch={toggleBatch}
+          onBatchAccept={handleBatchAccept}
         />
       </aside>
+
+      {/* Merge search modal */}
+      {mergeOpen && (
+        <div style={modalOverlayStyle} onClick={() => { setMergeOpen(null); setMergeQuery(""); setMergeResults([]); }}>
+          <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--sm-space-4)" }}>
+              <h3 style={{ margin: 0, fontSize: "var(--sm-text-base)", fontWeight: 600 }}>Merge into Existing Item</h3>
+              <button
+                style={{ ...btnStyle("ghost"), padding: 0 }}
+                onClick={() => { setMergeOpen(null); setMergeQuery(""); setMergeResults([]); }}
+              >
+                ✕
+              </button>
+            </div>
+            <p style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)", marginBottom: "var(--sm-space-3)" }}>
+              Search inventory to link observation <strong>{detail?.itemObservations?.find((o: ItemObservation) => o.id === mergeOpen)?.label || mergeOpen.slice(0, 8)}</strong> to an existing item.
+            </p>
+            <input
+              style={inputStyle}
+              placeholder="Search inventory by name…"
+              value={mergeQuery}
+              onChange={(e) => setMergeQuery(e.target.value)}
+              autoFocus
+            />
+            <div style={{ maxHeight: 240, overflowY: "auto", marginTop: "var(--sm-space-2)" }}>
+              {mergeResults.length === 0 && mergeQuery.trim() && (
+                <p style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)", textAlign: "center", padding: "var(--sm-space-4)" }}>
+                  No matching items found
+                </p>
+              )}
+              {mergeResults.map((item) => (
+                <button
+                  key={item.id}
+                  style={mergeResultStyle}
+                  onClick={() => handleMerge(mergeOpen, item.id)}
+                >
+                  <div>
+                    <div style={{ fontSize: "var(--sm-text-sm)", fontWeight: 500 }}>{item.name}</div>
+                    <div style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)" }}>
+                      {item.category || "No category"}
+                      {item.latestLocation?.zone?.name && ` · Zone ${item.latestLocation.zone.name}`}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)" }}>
+                    Qty {item.quantity}
+                  </span>
+                </button>
+              ))}
+              {mergeResults.length === 0 && !mergeQuery.trim() && (
+                <p style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)", textAlign: "center", padding: "var(--sm-space-4)" }}>
+                  Type to search inventory
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile actions toggle */}
       <button
@@ -190,37 +341,118 @@ export function OperatorConsole() {
 
 function DetailView({
   detail,
+  selectedObsIndex,
+  setSelectedObsIndex,
   onAction,
+  onMergeOpen,
+  batchSelection,
+  onToggleBatch,
   selectedId,
+  relabelingId,
+  relabelValue,
+  onRelabelStart,
+  onRelabelChange,
+  onRelabelSave,
+  onRelabelCancel,
 }: {
   detail: ReviewTask;
+  selectedObsIndex: number;
+  setSelectedObsIndex: (i: number) => void;
   onAction: (type: string, obsId?: string, extra?: Record<string, string>) => void;
+  onMergeOpen: (obsId: string) => void;
+  batchSelection: Set<string>;
+  onToggleBatch: (obsId: string) => void;
   selectedId: string;
+  relabelingId: string | null;
+  relabelValue: string;
+  onRelabelStart: (obsId: string, currentLabel: string) => void;
+  onRelabelChange: (v: string) => void;
+  onRelabelSave: (obsId: string) => void;
+  onRelabelCancel: () => void;
 }) {
   const observations = detail.itemObservations || [];
   const repairs = detail.repairObservations || [];
-  const activeObs = observations[0];
+  const actions = detail.actions || [];
+  const activeObs = observations[selectedObsIndex] || null;
+
+  const allProcessed = observations.every((o) => o.status !== "pending") &&
+    repairs.every((r) => r.status !== "pending");
+  const pendingObs = observations.filter((o) => o.status === "pending");
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "var(--sm-space-6)" }}>
+      {/* Completion banner */}
+      {allProcessed && observations.length > 0 && (
+        <div style={completionBannerStyle}>
+          <span style={{ fontWeight: 600 }}>Walkthrough complete</span>
+          <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-success-700)" }}>
+            All {observations.length} observations processed.{repairs.length > 0 ? ` ${repairs.length} repairs reviewed.` : ""}
+          </span>
+        </div>
+      )}
+
       {activeObs ? (
         <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "var(--sm-space-6)", flexWrap: "wrap", gap: "var(--sm-space-3)" }}>
+          {/* Obs header with nav */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "var(--sm-space-4)", flexWrap: "wrap", gap: "var(--sm-space-3)" }}>
             <div>
-              <h2 style={{ fontSize: "var(--sm-text-xl)", marginBottom: "var(--sm-space-1)" }}>
-                {activeObs.label}
-              </h2>
-              <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--sm-space-2)", marginBottom: "var(--sm-space-1)" }}>
+                {relabelingId === activeObs.id ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--sm-space-1)" }}>
+                    <input
+                      style={relabelInputStyle}
+                      value={relabelValue}
+                      onChange={(e) => onRelabelChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") onRelabelSave(activeObs.id);
+                        if (e.key === "Escape") onRelabelCancel();
+                      }}
+                      autoFocus
+                    />
+                    <button style={relabelBtnStyle("save")} onClick={() => onRelabelSave(activeObs.id)}>Save</button>
+                    <button style={relabelBtnStyle("cancel")} onClick={onRelabelCancel}>Cancel</button>
+                  </div>
+                ) : (
+                  <>
+                    <h2
+                      style={{ fontSize: "var(--sm-text-xl)", margin: 0, cursor: "pointer", borderBottom: "2px dashed transparent", transition: "border-color var(--sm-transition-fast)" }}
+                      onClick={() => onRelabelStart(activeObs.id, activeObs.label)}
+                      onMouseEnter={(e) => { (e.target as HTMLElement).style.borderBottomColor = "var(--sm-brand-400)"; }}
+                      onMouseLeave={(e) => { (e.target as HTMLElement).style.borderBottomColor = "transparent"; }}
+                      title="Click to relabel"
+                    >
+                      {activeObs.label}
+                    </h2>
+                  </>
+                )}
+                <span style={statusBadgeStyle(activeObs.status)}>{activeObs.status}</span>
+              </div>
+              <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)", margin: 0 }}>
                 {activeObs.zone?.name && `Zone ${activeObs.zone.name}`}
                 {activeObs.storageLocation?.name && ` — ${activeObs.storageLocation.name}`}
               </p>
             </div>
-            {activeObs.confidence != null && (
-              <span style={confidencePillStyle(activeObs.confidence)}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", display: "inline-block", background: activeObs.confidence >= 0.9 ? "var(--sm-success-500)" : activeObs.confidence >= 0.7 ? "var(--sm-warning-400)" : "var(--sm-danger-500)" }} />
-                {" "}{Math.round(activeObs.confidence * 100)}% match
-              </span>
-            )}
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--sm-space-3)" }}>
+              {activeObs.confidence != null && (
+                <span style={confidencePillStyle(activeObs.confidence)}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", display: "inline-block", background: activeObs.confidence >= 0.9 ? "var(--sm-success-500)" : activeObs.confidence >= 0.7 ? "var(--sm-warning-400)" : "var(--sm-danger-500)" }} />
+                  {" "}{Math.round(activeObs.confidence * 100)}%
+                </span>
+              )}
+              {/* Nav arrows */}
+              <div style={{ display: "flex", gap: 2 }}>
+                <button
+                  style={navBtnStyle}
+                  disabled={selectedObsIndex === 0}
+                  onClick={() => setSelectedObsIndex(Math.max(0, selectedObsIndex - 1))}
+                >&#8592;</button>
+                <button
+                  style={navBtnStyle}
+                  disabled={selectedObsIndex >= observations.length - 1}
+                  onClick={() => setSelectedObsIndex(Math.min(observations.length - 1, selectedObsIndex + 1))}
+                >&#8594;</button>
+              </div>
+            </div>
           </div>
 
           {/* Evidence frame */}
@@ -240,34 +472,72 @@ function DetailView({
               <span style={frameBadgeStyle}>
                 {activeObs.zone?.name && `Zone ${activeObs.zone.name}`}
               </span>
+              <span style={frameBadgeStyle}>
+                {selectedObsIndex + 1} / {observations.length}
+              </span>
             </div>
           </div>
 
+          {/* Inline actions for current observation */}
+          {activeObs.status === "pending" && (
+            <div style={{ display: "flex", gap: "var(--sm-space-2)", marginBottom: "var(--sm-space-4)", flexWrap: "wrap" }}>
+              <button style={btnStyle("success")} onClick={() => onAction("accept", activeObs.id)}>
+                Accept
+              </button>
+              <button style={btnStyle("danger")} onClick={() => onAction("reject", activeObs.id)}>
+                Reject
+              </button>
+              <button style={btnStyle("outline")} onClick={() => onRelabelStart(activeObs.id, activeObs.label)}>
+                Relabel
+              </button>
+              <button style={btnStyle("outline")} onClick={() => onMergeOpen(activeObs.id)}>
+                Merge into Item
+              </button>
+            </div>
+          )}
+
           {/* Detail grid */}
           <div style={detailGridStyle}>
-            <Field label="Proposed Identity" value={activeObs.label} sub={`Status: ${activeObs.status}`} />
+            <Field label="Proposed Identity" value={activeObs.label} sub={`Confidence: ${activeObs.confidence != null ? Math.round(activeObs.confidence * 100) + "%" : "N/A"}`} />
             <Field
               label="Current Location"
               value={[
                 activeObs.zone?.name && `Zone ${activeObs.zone.name}`,
                 activeObs.storageLocation?.name,
               ].filter(Boolean).join(" — ") || "Unknown"}
-              sub={`Confidence: ${activeObs.confidence != null ? Math.round(activeObs.confidence * 100) + "%" : "N/A"}`}
+              sub={activeObs.bbox ? `BBox: ${activeObs.bbox}` : undefined}
             />
             <Field label="Observation ID" value={activeObs.id.slice(0, 12) + "..."} sub={`Created ${activeObs.createdAt.slice(0, 10)}`} />
-            <Field label="Walkthrough" value={detail.walkthroughId.slice(0, 12) + "..."} sub={`Status: ${detail.walkthrough.status}`} />
+            <Field label="Walkthrough" value={detail.walkthroughId.slice(0, 12) + "..."} sub={`${pendingObs.length} pending of ${observations.length}`} />
           </div>
 
-          {/* Observation list */}
+          {/* Observation thumbnail strip */}
           {observations.length > 1 && (
             <div style={{ marginBottom: "var(--sm-space-6)" }}>
               <h3 style={sectionTitleStyle}>All Observations ({observations.length})</h3>
-              {observations.map((obs) => (
-                <div key={obs.id} style={obsRowStyle}>
-                  <span style={{ fontSize: "var(--sm-text-sm)", fontWeight: 500 }}>{obs.label}</span>
-                  <span style={statusBadgeStyle(obs.status)}>{obs.status}</span>
-                </div>
-              ))}
+              <div style={thumbnailStripStyle}>
+                {observations.map((obs, idx) => (
+                  <button
+                    key={obs.id}
+                    style={thumbStyle(idx === selectedObsIndex, obs.status)}
+                    onClick={() => setSelectedObsIndex(idx)}
+                  >
+                    <div style={thumbFrameStyle}>
+                      {obs.keyframeUrl ? (
+                        <img src={obs.keyframeUrl} alt="" style={thumbImgStyle} />
+                      ) : (
+                        <span style={{ fontSize: 10, color: "var(--sm-text-tertiary)" }}>No frame</span>
+                      )}
+                    </div>
+                    <div style={thumbLabelStyle}>{obs.label}</div>
+                    <div style={{ fontSize: 10, color: "var(--sm-text-tertiary)" }}>
+                      {obs.confidence != null ? Math.round(obs.confidence * 100) + "%" : "?"}
+                      {" · "}
+                      {obs.status}
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -277,17 +547,56 @@ function DetailView({
               <h3 style={sectionTitleStyle}>Repair Observations ({repairs.length})</h3>
               {repairs.map((rep) => (
                 <div key={rep.id} style={obsRowStyle}>
-                  <span style={{ fontSize: "var(--sm-text-sm)", fontWeight: 500 }}>{rep.label}</span>
+                  <div>
+                    <span style={{ fontSize: "var(--sm-text-sm)", fontWeight: 500 }}>{rep.label}</span>
+                    {rep.zone?.name && (
+                      <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)", marginLeft: "var(--sm-space-2)" }}>
+                        Zone {rep.zone.name}
+                      </span>
+                    )}
+                  </div>
                   <span style={statusBadgeStyle(rep.status)}>{rep.status}</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Audit log */}
+          {actions.length > 0 && (
+            <div>
+              <h3 style={sectionTitleStyle}>Audit Log ({actions.length})</h3>
+              <div style={auditLogStyle}>
+                {actions.map((a) => (
+                  <div key={a.id} style={auditRowStyle}>
+                    <span style={auditTypeStyle(a.actionType)}>{a.actionType}</span>
+                    <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)" }}>
+                      {a.observationId?.slice(0, 8)}...
+                    </span>
+                    {a.newLabel && (
+                      <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)" }}>
+                        → {a.newLabel}
+                      </span>
+                    )}
+                    {a.note && (
+                      <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)", fontStyle: "italic" }}>
+                        "{a.note}"
+                      </span>
+                    )}
+                    <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)", marginLeft: "auto" }}>
+                      {new Date(a.createdAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </>
       ) : (
         <div style={emptyStyle}>
           <p style={{ color: "var(--sm-text-tertiary)", fontSize: "var(--sm-text-sm)" }}>
-            No observations in this task.
+            {observations.length === 0
+              ? "No observations in this task."
+              : "All observations processed."}
           </p>
         </div>
       )}
@@ -300,9 +609,15 @@ function DetailView({
 function ActionsView({
   detail,
   onAction,
+  batchSelection,
+  onToggleBatch,
+  onBatchAccept,
 }: {
   detail: ReviewTask | null;
   onAction: (type: string, obsId?: string, extra?: Record<string, string>) => void;
+  batchSelection: Set<string>;
+  onToggleBatch: (obsId: string) => void;
+  onBatchAccept: () => void;
 }) {
   const [resolutionNote, setResolutionNote] = useState("");
 
@@ -319,78 +634,68 @@ function ActionsView({
 
   const observations = detail.itemObservations || [];
   const repairs = detail.repairObservations || [];
-  const firstObs = observations[0];
+  const pendingObs = observations.filter((o) => o.status === "pending");
+  const highConfPending = pendingObs.filter((o) => (o.confidence || 0) >= 0.9);
 
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       <h3 style={{ fontSize: "var(--sm-text-sm)", fontWeight: 600, marginBottom: "var(--sm-space-4)" }}>
-        Actions
+        Batch Operations
       </h3>
 
-      {/* Quick accept */}
-      {firstObs && firstObs.confidence != null && firstObs.confidence >= 0.9 && firstObs.status === "pending" && (
+      {/* Batch accept */}
+      {highConfPending.length > 1 ? (
         <div style={quickAcceptStyle}>
-          <div style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-success-700)", marginBottom: "var(--sm-space-2)" }}>
-            High confidence — quick accept available
+          <div style={{ fontSize: "var(--sm-text-xs)", fontWeight: 600, color: "var(--sm-success-700)", marginBottom: "var(--sm-space-2)" }}>
+            {highConfPending.length} high-confidence candidates
+          </div>
+          <div style={{ marginBottom: "var(--sm-space-2)" }}>
+            {highConfPending.map((obs) => (
+              <label key={obs.id} style={checkboxRowStyle}>
+                <input
+                  type="checkbox"
+                  checked={batchSelection.has(obs.id)}
+                  onChange={() => onToggleBatch(obs.id)}
+                  style={{ width: 14, height: 14 }}
+                />
+                <span style={{ fontSize: "var(--sm-text-xs)", fontWeight: 500 }}>{obs.label}</span>
+                <span style={{ fontSize: 10, color: "var(--sm-text-tertiary)" }}>
+                  {obs.confidence != null ? Math.round(obs.confidence * 100) + "%" : "?"}
+                </span>
+              </label>
+            ))}
           </div>
           <button
-            style={btnStyle("success")}
-            onClick={() => onAction("accept", firstObs.id)}
+            style={btnStyle("success", true)}
+            disabled={batchSelection.size === 0}
+            onClick={onBatchAccept}
+          >
+            Accept Selected ({batchSelection.size})
+          </button>
+        </div>
+      ) : highConfPending.length === 1 ? (
+        <div style={quickAcceptStyle}>
+          <div style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-success-700)", marginBottom: "var(--sm-space-2)" }}>
+            High confidence — quick accept
+          </div>
+          <button
+            style={btnStyle("success", true)}
+            onClick={() => onAction("accept", highConfPending[0].id)}
           >
             Confirm Identity &amp; Location
           </button>
         </div>
-      )}
+      ) : null}
 
-      {/* Item Identity */}
-      {firstObs && firstObs.status === "pending" && (
-        <ActionGroup title="Item Identity">
-          <button
-            style={btnStyle("outline", true)}
-            onClick={() => onAction("accept", firstObs.id)}
-          >
-            Accept Observation
-          </button>
-          <button
-            style={btnStyle("ghost", true)}
-            onClick={() => onAction("reject", firstObs.id)}
-          >
-            Reject Observation
-          </button>
-        </ActionGroup>
-      )}
-
-      {/* Relabel */}
-      {firstObs && firstObs.status === "pending" && (
-        <ActionGroup title="Relabel">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const form = e.currentTarget;
-              const input = form.elements.namedItem("newLabel") as HTMLInputElement;
-              if (input.value.trim()) {
-                onAction("relabel", firstObs.id, {
-                  newLabel: input.value.trim(),
-                  previousLabel: firstObs.label,
-                });
-              }
-            }}
-          >
-            <input
-              name="newLabel"
-              placeholder="New label…"
-              defaultValue={firstObs.label}
-              style={inputStyle}
-            />
-            <button type="submit" style={btnStyle("outline", true)}>
-              Relabel
-            </button>
-          </form>
-        </ActionGroup>
+      {/* Quick stats */}
+      {pendingObs.length > 0 && (
+        <div style={{ marginBottom: "var(--sm-space-6)", fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)" }}>
+          {pendingObs.length} pending observation{pendingObs.length !== 1 ? "s" : ""} remaining
+        </div>
       )}
 
       {/* Repair actions */}
-      {repairs.map((rep) => (
+      {repairs.filter((r) => r.status === "pending").map((rep) => (
         <ActionGroup key={rep.id} title={`Repair: ${rep.label}`}>
           <button style={btnStyle("outline", true)} onClick={() => onAction("accept", rep.id)}>
             Accept — Open Repair
@@ -412,22 +717,19 @@ function ActionsView({
         />
       </div>
 
-      {/* History */}
-      {detail.actions && detail.actions.length > 0 && (
-        <div>
-          <h4 style={groupTitleStyle}>Recent Actions</h4>
-          {detail.actions.slice(0, 10).map((a) => (
-            <div key={a.id} style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)", marginBottom: "var(--sm-space-1)" }}>
-              <strong>{a.actionType}</strong>
-              {a.newLabel && ` → ${a.newLabel}`}
-              {" "}
-              <span style={{ color: "var(--sm-text-tertiary)" }}>
-                {new Date(a.createdAt).toLocaleTimeString()}
-              </span>
-            </div>
-          ))}
+      {/* Quick actions summary */}
+      <div>
+        <h4 style={groupTitleStyle}>Task Info</h4>
+        <div style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)", lineHeight: 1.6 }}>
+          <div>Status: {detail.status}</div>
+          <div>Observations: {observations.length}</div>
+          <div>Repairs: {repairs.length}</div>
+          <div>Actions taken: {detail.actions?.length || 0}</div>
+          <div style={{ marginTop: "var(--sm-space-1)" }}>
+            Walkthrough: {detail.walkthroughId.slice(0, 12)}...
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -760,6 +1062,188 @@ function statusBadgeStyle(status: string): React.CSSProperties {
     borderRadius: "var(--sm-radius-full)",
     background: s.bg,
     color: s.color,
+  };
+}
+
+const completionBannerStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+  padding: "var(--sm-space-3) var(--sm-space-4)",
+  borderRadius: "var(--sm-radius-md)",
+  background: "#dcfce7",
+  border: "1px solid #bbf7d0",
+  marginBottom: "var(--sm-space-4)",
+  fontSize: "var(--sm-text-sm)",
+  color: "var(--sm-success-700)",
+};
+
+const navBtnStyle: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "1px solid var(--sm-border-default)",
+  borderRadius: "var(--sm-radius-sm)",
+  background: "var(--sm-surface-card)",
+  color: "var(--sm-text-secondary)",
+  cursor: "pointer",
+  fontSize: 14,
+};
+
+const thumbnailStripStyle: React.CSSProperties = {
+  display: "flex",
+  gap: "var(--sm-space-2)",
+  overflowX: "auto",
+  paddingBottom: "var(--sm-space-1)",
+};
+
+function thumbStyle(active: boolean, status: string): React.CSSProperties {
+  return {
+    minWidth: 100,
+    maxWidth: 100,
+    border: `2px solid ${active ? "var(--sm-brand-500)" : "var(--sm-border-default)"}`,
+    borderRadius: "var(--sm-radius-md)",
+    padding: "var(--sm-space-1)",
+    background: active ? "var(--sm-brand-50)" : "var(--sm-surface-card)",
+    cursor: "pointer",
+    opacity: status === "rejected" ? 0.4 : 1,
+    textAlign: "left",
+    font: "inherit",
+  };
+}
+
+const thumbFrameStyle: React.CSSProperties = {
+  width: "100%",
+  height: 56,
+  borderRadius: "var(--sm-radius-sm)",
+  background: "var(--sm-neutral-100)",
+  overflow: "hidden",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  marginBottom: 4,
+};
+
+const thumbImgStyle: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+};
+
+const thumbLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 500,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const auditLogStyle: React.CSSProperties = {
+  border: "1px solid var(--sm-border-default)",
+  borderRadius: "var(--sm-radius-md)",
+  overflow: "hidden",
+};
+
+const auditRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "var(--sm-space-2)",
+  padding: "var(--sm-space-2) var(--sm-space-3)",
+  borderBottom: "1px solid var(--sm-border-default)",
+  fontSize: "var(--sm-text-xs)",
+};
+
+function auditTypeStyle(type: string): React.CSSProperties {
+  const colors: Record<string, { bg: string; color: string }> = {
+    accept: { bg: "#dcfce7", color: "var(--sm-success-700)" },
+    reject: { bg: "#fee2e2", color: "var(--sm-danger-700)" },
+    merge: { bg: "#dbeafe", color: "var(--sm-brand-700)" },
+    relabel: { bg: "#fef3c7", color: "#92400e" },
+  };
+  const c = colors[type] || { bg: "var(--sm-neutral-100)", color: "var(--sm-text-secondary)" };
+  return {
+    fontWeight: 600,
+    fontSize: 10,
+    padding: "1px 6px",
+    borderRadius: "var(--sm-radius-full)",
+    background: c.bg,
+    color: c.color,
+    textTransform: "uppercase",
+  };
+}
+
+const checkboxRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "var(--sm-space-2)",
+  padding: "var(--sm-space-1) 0",
+  cursor: "pointer",
+};
+
+const modalOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 300,
+  background: "var(--sm-surface-overlay)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const modalStyle: React.CSSProperties = {
+  background: "var(--sm-surface-card)",
+  borderRadius: "var(--sm-radius-lg)",
+  border: "1px solid var(--sm-border-default)",
+  boxShadow: "var(--sm-shadow-lg)",
+  padding: "var(--sm-space-6)",
+  width: "100%",
+  maxWidth: 420,
+  maxHeight: "80vh",
+  display: "flex",
+  flexDirection: "column",
+};
+
+const mergeResultStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  width: "100%",
+  padding: "var(--sm-space-2) var(--sm-space-3)",
+  border: "1px solid var(--sm-border-default)",
+  borderRadius: "var(--sm-radius-md)",
+  marginBottom: "var(--sm-space-1)",
+  background: "var(--sm-surface-card)",
+  cursor: "pointer",
+  font: "inherit",
+  textAlign: "left",
+};
+
+const relabelInputStyle: React.CSSProperties = {
+  font: "inherit",
+  fontSize: "var(--sm-text-lg)",
+  fontWeight: 600,
+  padding: "var(--sm-space-1) var(--sm-space-2)",
+  border: "2px solid var(--sm-brand-400)",
+  borderRadius: "var(--sm-radius-md)",
+  background: "var(--sm-surface-card)",
+  color: "var(--sm-text-primary)",
+  outline: "none",
+  maxWidth: 280,
+};
+
+function relabelBtnStyle(variant: "save" | "cancel"): React.CSSProperties {
+  return {
+    font: "inherit",
+    fontSize: "var(--sm-text-xs)",
+    fontWeight: 500,
+    padding: "var(--sm-space-1) var(--sm-space-2)",
+    borderRadius: "var(--sm-radius-sm)",
+    border: "1px solid var(--sm-border-default)",
+    cursor: "pointer",
+    background: variant === "save" ? "var(--sm-brand-600)" : "var(--sm-surface-card)",
+    color: variant === "save" ? "var(--sm-text-inverse)" : "var(--sm-text-secondary)",
   };
 }
 

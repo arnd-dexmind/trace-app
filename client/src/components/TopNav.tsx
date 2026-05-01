@@ -54,6 +54,9 @@ export function TopNav() {
       <Link
         to="/review"
         style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--sm-space-2)",
           fontSize: "var(--sm-text-lg)",
           fontWeight: 700,
           color: "var(--sm-text-primary)",
@@ -61,9 +64,35 @@ export function TopNav() {
           marginRight: "var(--sm-space-2)",
         }}
       >
-        Space Memory
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none"
+             style={{ width: "28px", height: "28px", flexShrink: 0 }}
+             aria-hidden="true">
+          <path d="M 10 52 Q 28 -4, 58 14" stroke="#06B6D4" strokeWidth="1.5" strokeLinecap="round" opacity="0.30"/>
+          <circle cx="58" cy="14" r="2" fill="#06B6D4" opacity="0.35"/>
+          <path d="M 14 48 Q 30 2, 54 20" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" opacity="0.55"/>
+          <circle cx="54" cy="20" r="2.5" fill="#8B5CF6" opacity="0.6"/>
+          <path d="M 18 44 Q 32 8, 50 26" stroke="#4F46E5" strokeWidth="2" strokeLinecap="round" opacity="0.85"/>
+          <circle cx="50" cy="26" r="3" fill="#4F46E5" opacity="0.9"/>
+          <path d="M 8 32 C 10 16, 40 14, 54 26 C 44 46, 14 48, 8 32 Z" stroke="#09090B" strokeWidth="2.5" strokeLinejoin="round"/>
+          <circle cx="28" cy="31" r="10" fill="#4F46E5"/>
+          <circle cx="28" cy="31" r="5" fill="#09090B"/>
+          <circle cx="25" cy="28" r="2" fill="#FFFFFF"/>
+        </svg>
+        PerifEye
       </Link>
 
+      <Link
+        to="/"
+        style={navLinkStyle(location.pathname === "/")}
+      >
+        Dashboard
+      </Link>
+      <Link
+        to="/spaces"
+        style={navLinkStyle(isActive("/spaces"))}
+      >
+        Spaces
+      </Link>
       <Link
         to="/review"
         style={navLinkStyle(isActive("/review"))}
@@ -81,6 +110,12 @@ export function TopNav() {
         style={navLinkStyle(isActive("/repairs"))}
       >
         Repairs
+      </Link>
+      <Link
+        to="/upload"
+        style={navLinkStyle(isActive("/upload"))}
+      >
+        Upload
       </Link>
 
       <div style={{ marginLeft: "auto", display: "flex", gap: "var(--sm-space-3)", alignItems: "center" }}>

@@ -3,6 +3,27 @@ import { enqueuePipeline, getJobs as getJobsQueue, getProcessingMetrics as getMe
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 100;
+
+export interface PaginatedResult<T> {
+  data: T[];
+  nextCursor: string | null;
+}
+
+async function paginate<T extends { id: string }>(
+  findMany: (take: number) => Promise<T[]>,
+  cursor?: string,
+  limit?: number,
+): Promise<PaginatedResult<T>> {
+  const take = Math.min(limit && limit > 0 ? limit : DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE) + 1;
+  const results = await findMany(take);
+  const hasMore = results.length >= take;
+  const data = results.slice(0, take - 1);
+  const nextCursor = hasMore && data.length > 0 ? data[data.length - 1].id : null;
+  return { data, nextCursor };
+}
+
 async function ensureSpace(
   db: PrismaClient,
   spaceId: string,
@@ -54,12 +75,70 @@ export async function getSpace(
   return { ...space, itemCount, repairCount };
 }
 
-export async function listSpaces(db: PrismaClient, tenantId: string) {
-  return db.space.findMany({
-    where: { tenantId },
-    orderBy: { createdAt: "desc" },
-    take: 100,
+export async function listSpaces(
+  db: PrismaClient,
+  tenantId: string,
+  cursor?: string,
+  limit?: number,
+) {
+  const result = await paginate(
+    (take) =>
+      db.space.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: "desc" },
+        take,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      }),
+    cursor,
+    limit,
+  );
+
+  const counts = await Promise.all(
+    result.data.map((s) =>
+      Promise.all([
+        db.inventoryItem.count({ where: { spaceId: s.id, tenantId } }),
+        db.spaceZone.count({ where: { spaceId: s.id, tenantId } }),
+      ]),
+    ),
+  );
+
+  const data = result.data.map((s, i) => ({
+    ...s,
+    itemCount: counts[i][0],
+    zoneCount: counts[i][1],
+  }));
+
+  return { data, nextCursor: result.nextCursor };
+}
+
+export async function updateSpace(
+  db: PrismaClient,
+  spaceId: string,
+  tenantId: string,
+  params: { name?: string; description?: string },
+) {
+  const space = await ensureSpace(db, spaceId, tenantId);
+  if (!space) return null;
+
+  return db.space.update({
+    where: { id: spaceId },
+    data: {
+      ...(params.name !== undefined ? { name: params.name } : {}),
+      ...(params.description !== undefined ? { description: params.description.trim() || null } : {}),
+    },
   });
+}
+
+export async function deleteSpace(
+  db: PrismaClient,
+  spaceId: string,
+  tenantId: string,
+) {
+  const space = await ensureSpace(db, spaceId, tenantId);
+  if (!space) return null;
+
+  await db.space.delete({ where: { id: spaceId } });
+  return { deleted: true, id: spaceId };
 }
 
 // ── Walkthroughs ──────────────────────────────────────────────────────────────
@@ -90,12 +169,20 @@ export async function listWalkthroughs(
   db: PrismaClient,
   spaceId: string,
   tenantId: string,
-) {
-  return db.walkthrough.findMany({
-    where: { spaceId, tenantId },
-    orderBy: { uploadedAt: "desc" },
-    take: 100,
-  });
+  cursor?: string,
+  limit?: number,
+): Promise<PaginatedResult<Awaited<ReturnType<typeof db.walkthrough.findMany>>[number]>> {
+  return paginate(
+    (take) =>
+      db.walkthrough.findMany({
+        where: { spaceId, tenantId },
+        orderBy: { uploadedAt: "desc" },
+        take,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      }),
+    cursor,
+    limit,
+  );
 }
 
 export async function getWalkthrough(
@@ -223,14 +310,19 @@ export async function ingestObservations(
 
 export async function searchItems(
   db: PrismaClient,
-  params: { spaceId: string; tenantId: string; name?: string; zoneId?: string },
-) {
+  params: { spaceId: string; tenantId: string; name?: string; zoneId?: string; cursor?: string; limit?: number },
+): Promise<PaginatedResult<Awaited<ReturnType<typeof db.inventoryItem.findMany>>[number] & { latestLocation: unknown }>> {
+  const limit = params.limit;
+  const cursor = params.cursor;
+
   let items: Awaited<ReturnType<typeof db.inventoryItem.findMany>>;
 
   if (params.name && params.name.trim()) {
     const query = params.name.trim();
+    const take = Math.min(limit && limit > 0 ? limit : DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE) + 1;
 
-    // Full-text search with ts_rank for ranking
+    // Full-text search with ts_rank for ranking — pagination via LIMIT/OFFSET
+    const offset = cursor ? 1 : 0; // simplified: cursor not supported for FTS
     items = await db.$queryRaw`
       SELECT i.*, ts_rank(i."searchVector", plainto_tsquery('english', ${query})) AS rank
       FROM "InventoryItem" i
@@ -238,7 +330,7 @@ export async function searchItems(
         AND i."tenantId" = ${params.tenantId}
         AND i."searchVector" @@ plainto_tsquery('english', ${query})
       ORDER BY rank DESC
-      LIMIT 100
+      LIMIT ${take}
     `;
   } else {
     items = await db.inventoryItem.findMany({
@@ -248,13 +340,18 @@ export async function searchItems(
         ...(params.zoneId ? { locationHistory: { some: { zoneId: params.zoneId } } } : {}),
       },
       orderBy: { name: "asc" },
-      take: 100,
+      take: Math.min(limit && limit > 0 ? limit : DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE) + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
   }
 
-  if (items.length === 0) return items;
+  const hasMore = items.length > Math.min(limit && limit > 0 ? limit : DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+  const data = items.slice(0, Math.min(limit && limit > 0 ? limit : DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE));
+  const nextCursor = hasMore && data.length > 0 ? data[data.length - 1].id : null;
 
-  const itemIds = items.map((i) => i.id);
+  if (data.length === 0) return { data: [], nextCursor: null };
+
+  const itemIds = data.map((i) => i.id);
   const allHistory = await db.itemLocationHistory.findMany({
     where: { itemId: { in: itemIds } },
     orderBy: { observedAt: "desc" },
@@ -269,10 +366,13 @@ export async function searchItems(
     if (!latestByItemId.has(h.itemId)) latestByItemId.set(h.itemId, h);
   }
 
-  return items.map((item) => ({
-    ...item,
-    latestLocation: latestByItemId.get(item.id) ?? null,
-  }));
+  return {
+    data: data.map((item) => ({
+      ...item,
+      latestLocation: latestByItemId.get(item.id) ?? null,
+    })),
+    nextCursor,
+  };
 }
 
 export async function getItem(
@@ -337,19 +437,25 @@ export async function createItem(
 
 export async function listRepairs(
   db: PrismaClient,
-  params: { spaceId: string; tenantId: string; status?: string },
-) {
+  params: { spaceId: string; tenantId: string; status?: string; cursor?: string; limit?: number },
+): Promise<PaginatedResult<Awaited<ReturnType<typeof db.repairIssue.findMany>>[number]>> {
   const where: Record<string, unknown> = {
     spaceId: params.spaceId,
     tenantId: params.tenantId,
   };
   if (params.status) where.status = params.status;
 
-  return db.repairIssue.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  return paginate(
+    (take) =>
+      db.repairIssue.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take,
+        ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+      }),
+    params.cursor,
+    params.limit,
+  );
 }
 
 export async function createRepair(
@@ -430,12 +536,20 @@ export async function listZones(
   db: PrismaClient,
   spaceId: string,
   tenantId: string,
-) {
-  return db.spaceZone.findMany({
-    where: { spaceId, tenantId },
-    orderBy: { name: "asc" },
-    take: 100,
-  });
+  cursor?: string,
+  limit?: number,
+): Promise<PaginatedResult<Awaited<ReturnType<typeof db.spaceZone.findMany>>[number]>> {
+  return paginate(
+    (take) =>
+      db.spaceZone.findMany({
+        where: { spaceId, tenantId },
+        orderBy: { name: "asc" },
+        take,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      }),
+    cursor,
+    limit,
+  );
 }
 
 // ── Storage Locations ──────────────────────────────────────────────────────────
@@ -467,27 +581,35 @@ export async function listStorageLocations(
   db: PrismaClient,
   spaceId: string,
   tenantId: string,
-) {
-  return db.storageLocation.findMany({
-    where: { spaceId, tenantId, parentId: null },
-    orderBy: { name: "asc" },
-    take: 100,
-    include: {
-      zone: { select: { id: true, name: true } },
-      children: {
+  cursor?: string,
+  limit?: number,
+): Promise<PaginatedResult<Awaited<ReturnType<typeof db.storageLocation.findMany>>[number]>> {
+  return paginate(
+    (take) =>
+      db.storageLocation.findMany({
+        where: { spaceId, tenantId, parentId: null },
         orderBy: { name: "asc" },
+        take,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
         include: {
           zone: { select: { id: true, name: true } },
           children: {
             orderBy: { name: "asc" },
             include: {
               zone: { select: { id: true, name: true } },
+              children: {
+                orderBy: { name: "asc" },
+                include: {
+                  zone: { select: { id: true, name: true } },
+                },
+              },
             },
           },
         },
-      },
-    },
-  });
+      }),
+    cursor,
+    limit,
+  );
 }
 
 // ── Diff ─────────────────────────────────────────────────────────────────────
@@ -593,12 +715,20 @@ export async function listAliases(
   db: PrismaClient,
   itemId: string,
   tenantId: string,
-) {
-  return db.itemAlias.findMany({
-    where: { itemId, tenantId },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  cursor?: string,
+  limit?: number,
+): Promise<PaginatedResult<Awaited<ReturnType<typeof db.itemAlias.findMany>>[number]>> {
+  return paginate(
+    (take) =>
+      db.itemAlias.findMany({
+        where: { itemId, tenantId },
+        orderBy: { createdAt: "desc" },
+        take,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      }),
+    cursor,
+    limit,
+  );
 }
 
 export async function createAlias(
@@ -653,17 +783,25 @@ export async function listReviewQueue(
   db: PrismaClient,
   tenantId: string,
   status?: string,
-) {
-  return db.reviewTask.findMany({
-    where: { tenantId, status: status || "pending" },
-    orderBy: { createdAt: "asc" },
-    take: 100,
-    include: {
-      walkthrough: {
-        select: { id: true, spaceId: true, status: true, uploadedAt: true },
-      },
-    },
-  });
+  cursor?: string,
+  limit?: number,
+): Promise<PaginatedResult<Awaited<ReturnType<typeof db.reviewTask.findMany>>[number]>> {
+  return paginate(
+    (take) =>
+      db.reviewTask.findMany({
+        where: { tenantId, status: status || "pending" },
+        orderBy: { createdAt: "asc" },
+        take,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        include: {
+          walkthrough: {
+            select: { id: true, spaceId: true, status: true, uploadedAt: true },
+          },
+        },
+      }),
+    cursor,
+    limit,
+  );
 }
 
 export async function getReviewTask(

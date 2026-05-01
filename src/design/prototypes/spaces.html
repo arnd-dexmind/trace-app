@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Space Management — PerifEye</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+  .app-shell {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 var(--sm-space-4);
+  }
+
+  /* --- Top nav --- */
+  .top-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-4) 0;
+    border-bottom: 1px solid var(--sm-border-default);
+    margin-bottom: var(--sm-space-6);
+  }
+  .top-nav .logo {
+    font-size: var(--sm-text-lg);
+    font-weight: var(--sm-font-bold);
+    color: var(--sm-text-primary);
+    text-decoration: none;
+  }
+  .top-nav .nav-link {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-secondary);
+    text-decoration: none;
+    padding: var(--sm-space-1) var(--sm-space-2);
+    border-radius: var(--sm-radius-md);
+  }
+  .top-nav .nav-link:hover { color: var(--sm-text-primary); background: var(--sm-neutral-100); }
+  .top-nav .nav-link.active { color: var(--sm-brand-600); }
+
+  /* --- Page header --- */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--sm-space-6);
+    flex-wrap: wrap;
+    gap: var(--sm-space-3);
+  }
+  .page-header h1 {
+    font-size: var(--sm-text-2xl);
+    font-weight: var(--sm-font-bold);
+  }
+  .page-header .subtitle {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+    margin-top: var(--sm-space-1);
+  }
+
+  /* --- Button --- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sm-space-2);
+    font: inherit;
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    padding: var(--sm-space-2) var(--sm-space-6);
+    border-radius: var(--sm-radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    min-height: var(--sm-touch-target);
+    transition: background var(--sm-transition-fast), opacity var(--sm-transition-fast);
+    white-space: nowrap;
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--sm-border-focus);
+    outline-offset: 2px;
+  }
+  .btn-primary {
+    background: var(--sm-brand-600);
+    color: var(--sm-text-inverse);
+  }
+  .btn-primary:hover { background: var(--sm-brand-700); }
+  .btn-outline {
+    background: var(--sm-surface-card);
+    border-color: var(--sm-border-default);
+    color: var(--sm-text-primary);
+  }
+  .btn-outline:hover { background: var(--sm-neutral-50); }
+  .btn-danger {
+    background: var(--sm-danger-600);
+    color: var(--sm-text-inverse);
+  }
+  .btn-danger:hover { background: var(--sm-danger-700); }
+  .btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--sm-text-secondary);
+  }
+  .btn-ghost:hover { background: var(--sm-neutral-100); color: var(--sm-text-primary); }
+  .btn-sm {
+    font-size: var(--sm-text-xs);
+    padding: var(--sm-space-1) var(--sm-space-3);
+    min-height: 32px;
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* --- Space list --- */
+  .space-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sm-space-3);
+  }
+  .space-card {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-4);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-lg);
+    background: var(--sm-surface-card);
+    transition: border-color var(--sm-transition-fast), box-shadow var(--sm-transition-fast);
+  }
+  .space-card:hover {
+    border-color: var(--sm-neutral-300);
+    box-shadow: var(--sm-shadow-sm);
+  }
+  .space-card.active {
+    border-color: var(--sm-brand-300);
+    background: var(--sm-brand-50);
+  }
+  .space-card .sc-icon {
+    width: 44px; height: 44px;
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-neutral-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .space-card.active .sc-icon {
+    background: var(--sm-brand-100);
+  }
+  .space-card .sc-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .space-card .sc-name {
+    font-size: var(--sm-text-base);
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: 2px;
+  }
+  .space-card .sc-desc {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .space-card .sc-meta {
+    display: flex;
+    gap: var(--sm-space-4);
+    margin-top: var(--sm-space-1);
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+  }
+  .space-card .sc-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .space-card .sc-actions {
+    display: flex;
+    gap: var(--sm-space-2);
+    flex-shrink: 0;
+  }
+  .space-card .sc-badge {
+    font-size: 10px;
+    font-weight: var(--sm-font-medium);
+    padding: 2px 8px;
+    border-radius: var(--sm-radius-full);
+    background: var(--sm-brand-100);
+    color: var(--sm-brand-700);
+    white-space: nowrap;
+  }
+
+  /* --- Empty state --- */
+  .empty-state {
+    text-align: center;
+    padding: var(--sm-space-16) var(--sm-space-4);
+    color: var(--sm-text-tertiary);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: var(--sm-space-4); display: block; }
+  .empty-state h3 {
+    font-size: var(--sm-text-base);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-secondary);
+    margin-bottom: var(--sm-space-2);
+  }
+  .empty-state p {
+    font-size: var(--sm-text-sm);
+    max-width: 360px;
+    margin: 0 auto var(--sm-space-6);
+    color: var(--sm-text-tertiary);
+  }
+
+  /* --- Error banner --- */
+  .error-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-3);
+    padding: var(--sm-space-3) var(--sm-space-4);
+    border-radius: var(--sm-radius-md);
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: var(--sm-danger-700);
+    font-size: var(--sm-text-sm);
+    margin-bottom: var(--sm-space-6);
+  }
+  .error-banner .eb-dismiss {
+    margin-left: auto;
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: var(--sm-danger-500);
+    cursor: pointer;
+    padding: var(--sm-space-1);
+    border-radius: var(--sm-radius-sm);
+  }
+
+  /* --- Loading --- */
+  .loading-block {
+    text-align: center;
+    padding: var(--sm-space-12) var(--sm-space-4);
+    color: var(--sm-text-tertiary);
+    font-size: var(--sm-text-sm);
+  }
+  .loading-block .spinner {
+    display: inline-block;
+    width: 24px; height: 24px;
+    border: 2px solid var(--sm-neutral-200);
+    border-top-color: var(--sm-brand-500);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin-bottom: var(--sm-space-3);
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* --- Modal overlay --- */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: var(--sm-surface-overlay);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sm-space-4);
+  }
+  .modal-overlay.open {
+    display: flex;
+  }
+  .modal {
+    background: var(--sm-surface-elevated);
+    border-radius: var(--sm-radius-xl);
+    box-shadow: var(--sm-shadow-lg);
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--sm-space-4) var(--sm-space-6);
+    border-bottom: 1px solid var(--sm-border-default);
+  }
+  .modal-header h2 {
+    font-size: var(--sm-text-lg);
+    font-weight: var(--sm-font-semibold);
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: var(--sm-text-tertiary);
+    cursor: pointer;
+    padding: var(--sm-space-1);
+    border-radius: var(--sm-radius-sm);
+    min-width: var(--sm-touch-target);
+    min-height: var(--sm-touch-target);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-close:hover { background: var(--sm-neutral-100); color: var(--sm-text-primary); }
+  .modal-body {
+    padding: var(--sm-space-6);
+  }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sm-space-3);
+    padding: var(--sm-space-4) var(--sm-space-6);
+    border-top: 1px solid var(--sm-border-default);
+  }
+
+  /* --- Form fields --- */
+  .form-field {
+    margin-bottom: var(--sm-space-5);
+  }
+  .form-field:last-child { margin-bottom: 0; }
+  .form-field label {
+    display: block;
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    margin-bottom: var(--sm-space-2);
+    color: var(--sm-text-primary);
+  }
+  .form-field .hint {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+    font-weight: var(--sm-font-normal);
+    margin-left: var(--sm-space-1);
+  }
+  .form-field input,
+  .form-field textarea {
+    width: 100%;
+    font: inherit;
+    font-size: var(--sm-text-base);
+    padding: var(--sm-space-3) var(--sm-space-4);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-surface-card);
+    color: var(--sm-text-primary);
+    transition: border-color var(--sm-transition-fast);
+  }
+  .form-field input:focus,
+  .form-field textarea:focus {
+    outline: none;
+    border-color: var(--sm-border-focus);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+  .form-field textarea {
+    resize: vertical;
+    min-height: 80px;
+  }
+  .form-field .error-msg {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-danger-600);
+    margin-top: var(--sm-space-1);
+    display: none;
+  }
+  .form-field.has-error input,
+  .form-field.has-error textarea {
+    border-color: var(--sm-danger-500);
+  }
+  .form-field.has-error .error-msg { display: block; }
+
+  /* --- Delete confirmation --- */
+  .delete-warning {
+    display: flex;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-4);
+    border-radius: var(--sm-radius-md);
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    margin-bottom: var(--sm-space-4);
+  }
+  .delete-warning .dw-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+  .delete-warning .dw-text {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-danger-700);
+  }
+  .delete-warning .dw-text strong {
+    display: block;
+    margin-bottom: var(--sm-space-1);
+    font-size: var(--sm-text-base);
+  }
+
+  /* --- State visibility --- */
+  .state { display: none; }
+  .state.visible { display: block; }
+
+  /* --- Responsive --- */
+  @media (max-width: 640px) {
+    .space-card {
+      flex-wrap: wrap;
+      gap: var(--sm-space-3);
+    }
+    .space-card .sc-actions {
+      width: 100%;
+      justify-content: flex-end;
+    }
+    .space-card .sc-meta {
+      flex-wrap: wrap;
+      gap: var(--sm-space-2);
+    }
+    .modal {
+      max-width: 100%;
+      margin: var(--sm-space-2);
+      border-radius: var(--sm-radius-lg);
+    }
+    .modal-body { padding: var(--sm-space-4); }
+    .modal-footer { flex-direction: column; }
+    .modal-footer .btn { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- ===== Top Nav ===== -->
+  <nav class="top-nav">
+    <a href="#" class="logo">PerifEye</a>
+    <a href="dashboard.html" class="nav-link">Dashboard</a>
+    <a href="item-search.html" class="nav-link">Items</a>
+    <a href="repair-list.html" class="nav-link">Repairs</a>
+    <a href="upload.html" class="nav-link">Upload</a>
+  </nav>
+
+  <!-- ===== State: Populated ===== -->
+  <div class="state visible" id="state-populated">
+    <div class="page-header">
+      <div>
+        <h1>Spaces</h1>
+        <p class="subtitle">3 spaces across default tenant</p>
+      </div>
+      <button class="btn btn-primary" onclick="openCreateModal()">+ Create Space</button>
+    </div>
+
+    <div class="space-list">
+      <!-- Active space -->
+      <div class="space-card active">
+        <div class="sc-icon">&#127981;</div>
+        <div class="sc-body">
+          <div class="sc-name">
+            Warehouse A-12 — Floor 3
+            <span class="sc-badge">Active</span>
+          </div>
+          <div class="sc-desc">Main warehouse floor with pallet racking, loading dock, and storage zones A-C</div>
+          <div class="sc-meta">
+            <span>&#128230; 247 items</span>
+            <span>&#128295; 8 open repairs</span>
+            <span>&#128249; 14 walkthroughs</span>
+            <span>Created Jan 12, 2026</span>
+          </div>
+        </div>
+        <div class="sc-actions">
+          <button class="btn btn-outline btn-sm" onclick="openEditModal('Warehouse A-12 — Floor 3', 'Main warehouse floor with pallet racking, loading dock, and storage zones A-C')">Edit</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--sm-danger-600);" onclick="openDeleteModal('Warehouse A-12 — Floor 3', 247, 8, 14)">Delete</button>
+        </div>
+      </div>
+
+      <!-- Other spaces -->
+      <div class="space-card">
+        <div class="sc-icon">&#127970;</div>
+        <div class="sc-body">
+          <div class="sc-name">Office B-04 — Floor 2</div>
+          <div class="sc-desc">Administrative office suite, meeting rooms, and kitchen area</div>
+          <div class="sc-meta">
+            <span>&#128230; 83 items</span>
+            <span>&#128295; 2 open repairs</span>
+            <span>&#128249; 5 walkthroughs</span>
+            <span>Created Mar 5, 2026</span>
+          </div>
+        </div>
+        <div class="sc-actions">
+          <button class="btn btn-outline btn-sm" onclick="openEditModal('Office B-04 — Floor 2', 'Administrative office suite, meeting rooms, and kitchen area')">Edit</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--sm-danger-600);" onclick="openDeleteModal('Office B-04 — Floor 2', 83, 2, 5)">Delete</button>
+        </div>
+      </div>
+
+      <div class="space-card">
+        <div class="sc-icon">&#128300;</div>
+        <div class="sc-body">
+          <div class="sc-name">Lab C-01 — Floor 1</div>
+          <div class="sc-desc">Research lab with equipment benches, chemical storage, and clean room</div>
+          <div class="sc-meta">
+            <span>&#128230; 156 items</span>
+            <span>&#128295; 1 open repair</span>
+            <span>&#128249; 3 walkthroughs</span>
+            <span>Created Apr 18, 2026</span>
+          </div>
+        </div>
+        <div class="sc-actions">
+          <button class="btn btn-outline btn-sm" onclick="openEditModal('Lab C-01 — Floor 1', 'Research lab with equipment benches, chemical storage, and clean room')">Edit</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--sm-danger-600);" onclick="openDeleteModal('Lab C-01 — Floor 1', 156, 1, 3)">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== State: Empty (no spaces) ===== -->
+  <div class="state" id="state-empty">
+    <div class="page-header">
+      <div>
+        <h1>Spaces</h1>
+      </div>
+    </div>
+
+    <div class="empty-state">
+      <span class="icon" aria-hidden="true">&#127760;</span>
+      <h3>No spaces yet</h3>
+      <p>Create your first space to start managing walkthroughs, inventory, and repairs. A space typically represents a physical location like a warehouse, office, or lab.</p>
+      <button class="btn btn-primary" onclick="openCreateModal()">Create First Space</button>
+    </div>
+  </div>
+
+  <!-- ===== State: Loading ===== -->
+  <div class="state" id="state-loading">
+    <div class="page-header">
+      <div>
+        <h1>Spaces</h1>
+        <p class="subtitle">Loading&hellip;</p>
+      </div>
+    </div>
+
+    <div class="loading-block">
+      <div class="spinner"></div>
+      <p>Loading spaces&hellip;</p>
+    </div>
+  </div>
+
+  <!-- ===== State: Error ===== -->
+  <div class="state" id="state-error">
+    <div class="page-header">
+      <div>
+        <h1>Spaces</h1>
+      </div>
+    </div>
+
+    <div class="error-banner">
+      <span>&#9888;&#65039;</span>
+      <span>Failed to load spaces. Check your connection and try again.</span>
+      <button class="eb-dismiss" aria-label="Dismiss error">&times;</button>
+    </div>
+
+    <div style="text-align:center;padding:var(--sm-space-8) var(--sm-space-4);">
+      <button class="btn btn-outline" onclick="showState('state-loading'); setTimeout(function(){ showState('state-populated'); }, 1000);">Retry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Create Space ===== -->
+<div class="modal-overlay" id="modal-create">
+  <div class="modal" role="dialog" aria-labelledby="modal-create-title" aria-modal="true">
+    <div class="modal-header">
+      <h2 id="modal-create-title">Create Space</h2>
+      <button class="modal-close" onclick="closeModal('modal-create')" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field" id="field-name">
+        <label for="create-name">Name <span class="hint">required</span></label>
+        <input type="text" id="create-name" placeholder="e.g. Warehouse A-12 — Floor 3" maxlength="120" />
+        <div class="error-msg">Name is required</div>
+      </div>
+      <div class="form-field">
+        <label for="create-desc">Description <span class="hint">optional</span></label>
+        <textarea id="create-desc" placeholder="Brief description of this space&hellip;" maxlength="500"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-create')">Cancel</button>
+      <button class="btn btn-primary" id="btn-create-submit" onclick="submitCreate()">Create Space</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Edit Space ===== -->
+<div class="modal-overlay" id="modal-edit">
+  <div class="modal" role="dialog" aria-labelledby="modal-edit-title" aria-modal="true">
+    <div class="modal-header">
+      <h2 id="modal-edit-title">Edit Space</h2>
+      <button class="modal-close" onclick="closeModal('modal-edit')" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field" id="field-edit-name">
+        <label for="edit-name">Name <span class="hint">required</span></label>
+        <input type="text" id="edit-name" maxlength="120" />
+        <div class="error-msg">Name is required</div>
+      </div>
+      <div class="form-field">
+        <label for="edit-desc">Description <span class="hint">optional</span></label>
+        <textarea id="edit-desc" maxlength="500"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-edit')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Delete Confirmation ===== -->
+<div class="modal-overlay" id="modal-delete">
+  <div class="modal" role="alertdialog" aria-labelledby="modal-delete-title" aria-modal="true">
+    <div class="modal-header">
+      <h2 id="modal-delete-title" style="color:var(--sm-danger-700);">Delete Space</h2>
+      <button class="modal-close" onclick="closeModal('modal-delete')" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="delete-warning">
+        <span class="dw-icon" aria-hidden="true">&#9888;&#65039;</span>
+        <div class="dw-text">
+          <strong>This action cannot be undone.</strong>
+          <span id="delete-summary"></span>
+        </div>
+      </div>
+      <p style="font-size:var(--sm-text-sm);color:var(--sm-text-secondary);margin-bottom:var(--sm-space-4);">
+        Type the space name to confirm deletion:
+      </p>
+      <div class="form-field" id="field-delete-confirm">
+        <label for="delete-confirm" class="sm-sr-only">Space name confirmation</label>
+        <input type="text" id="delete-confirm" placeholder="Enter space name to confirm" autocomplete="off" />
+        <div class="error-msg">Name does not match</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-delete')">Cancel</button>
+      <button class="btn btn-danger" id="btn-delete-submit" disabled onclick="submitDelete()">Delete Space</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Success toast ===== -->
+<div id="toast" style="
+  display: none;
+  position: fixed;
+  bottom: var(--sm-space-6);
+  right: var(--sm-space-6);
+  padding: var(--sm-space-3) var(--sm-space-5);
+  border-radius: var(--sm-radius-md);
+  background: var(--sm-neutral-800);
+  color: var(--sm-text-inverse);
+  font-size: var(--sm-text-sm);
+  font-weight: var(--sm-font-medium);
+  box-shadow: var(--sm-shadow-lg);
+  z-index: 200;
+  align-items: center;
+  gap: var(--sm-space-2);
+"></div>
+
+<script>
+  // ── State switching ──
+  function showState(name) {
+    document.querySelectorAll('.state').forEach(function(el) {
+      el.classList.remove('visible');
+    });
+    var target = document.getElementById(name);
+    if (target) target.classList.add('visible');
+  }
+
+  // ── Modal management ──
+  function openModal(id) {
+    document.getElementById(id).classList.add('open');
+    // Focus first input in modal
+    var input = document.getElementById(id).querySelector('input');
+    if (input) setTimeout(function() { input.focus(); }, 100);
+  }
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+    clearFormErrors(id);
+  }
+
+  function clearFormErrors(modalId) {
+    document.getElementById(modalId).querySelectorAll('.has-error').forEach(function(el) {
+      el.classList.remove('has-error');
+    });
+  }
+
+  // Close modals on overlay click
+  document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeModal(overlay.id);
+    });
+  });
+
+  // Close modals on Escape
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay.open').forEach(function(overlay) {
+        closeModal(overlay.id);
+      });
+    }
+  });
+
+  // ── Create modal ──
+  function openCreateModal() {
+    document.getElementById('create-name').value = '';
+    document.getElementById('create-desc').value = '';
+    openModal('modal-create');
+  }
+
+  function submitCreate() {
+    var name = document.getElementById('create-name').value.trim();
+    var field = document.getElementById('field-name');
+
+    if (!name) {
+      field.classList.add('has-error');
+      document.getElementById('create-name').focus();
+      return;
+    }
+    field.classList.remove('has-error');
+
+    // Demo: close modal, show toast
+    closeModal('modal-create');
+    showToast('Space created successfully');
+  }
+
+  // ── Edit modal ──
+  function openEditModal(name, desc) {
+    document.getElementById('edit-name').value = name;
+    document.getElementById('edit-desc').value = desc || '';
+    openModal('modal-edit');
+  }
+
+  function submitEdit() {
+    var name = document.getElementById('edit-name').value.trim();
+    var field = document.getElementById('field-edit-name');
+
+    if (!name) {
+      field.classList.add('has-error');
+      document.getElementById('edit-name').focus();
+      return;
+    }
+    field.classList.remove('has-error');
+
+    closeModal('modal-edit');
+    showToast('Space updated');
+  }
+
+  // ── Delete modal ──
+  var deleteTargetName = '';
+
+  function openDeleteModal(name, itemCount, repairCount, walkthroughCount) {
+    deleteTargetName = name;
+    document.getElementById('delete-summary').textContent =
+      'Deleting "' + name + '" will permanently remove ' +
+      itemCount + ' items, ' + repairCount + ' repair issues, and ' +
+      walkthroughCount + ' walkthroughs.';
+    document.getElementById('delete-confirm').value = '';
+    document.getElementById('btn-delete-submit').disabled = true;
+    document.getElementById('field-delete-confirm').classList.remove('has-error');
+    openModal('modal-delete');
+  }
+
+  document.getElementById('delete-confirm').addEventListener('input', function() {
+    var matches = this.value.trim() === deleteTargetName;
+    document.getElementById('btn-delete-submit').disabled = !matches;
+    var field = document.getElementById('field-delete-confirm');
+    if (matches) {
+      field.classList.remove('has-error');
+    }
+  });
+
+  function submitDelete() {
+    var input = document.getElementById('delete-confirm').value.trim();
+    if (input !== deleteTargetName) {
+      document.getElementById('field-delete-confirm').classList.add('has-error');
+      return;
+    }
+    closeModal('modal-delete');
+    showToast('Space deleted');
+  }
+
+  // ── Toast ──
+  function showToast(msg) {
+    var toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.style.display = 'flex';
+    setTimeout(function() {
+      toast.style.display = 'none';
+    }, 3000);
+  }
+
+  // ── Error banner dismiss ──
+  document.querySelectorAll('.eb-dismiss').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      this.closest('.error-banner').style.display = 'none';
+    });
+  });
+</script>
+
+</body>
+</html>

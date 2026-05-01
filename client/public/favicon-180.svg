@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" fill="none">
+  <!-- Outer peripheral arc (cyan) with node -->
+  <path d="M 28 146 Q 78 -12, 162 40"
+        stroke="#06B6D4" stroke-width="3" stroke-linecap="round" opacity="0.35"/>
+  <circle cx="162" cy="40" r="5" fill="#06B6D4" opacity="0.40"/>
+
+  <!-- Middle peripheral arc (violet) with node -->
+  <path d="M 38 134 Q 82 6, 150 56"
+        stroke="#8B5CF6" stroke-width="4" stroke-linecap="round" opacity="0.60"/>
+  <circle cx="150" cy="56" r="6" fill="#8B5CF6" opacity="0.65"/>
+
+  <!-- Inner peripheral arc (indigo) with node -->
+  <path d="M 48 122 Q 86 24, 138 72"
+        stroke="#4F46E5" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+  <circle cx="138" cy="72" r="7" fill="#4F46E5" opacity="0.90"/>
+
+  <!-- Eye shape -->
+  <path d="M 22 90 C 28 45, 152 45, 158 90 C 152 135, 28 135, 22 90 Z"
+        stroke="#09090B" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- Iris -->
+  <circle cx="78" cy="88" r="30" fill="#4F46E5"/>
+
+  <!-- Pupil -->
+  <circle cx="78" cy="88" r="15" fill="#09090B"/>
+
+  <!-- Catchlight -->
+  <circle cx="70" cy="80" r="7" fill="#FFFFFF"/>
+</svg>

@@ -14,3 +14,9 @@ coverage/
 # File uploads
 uploads/
 .vercel
+
+# Build artifacts
+client/tsconfig.tsbuildinfo
+
+# Test artifacts
+test-results/

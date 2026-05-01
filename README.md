@@ -1,15 +1,15 @@
-# Space Memory
+# PerifEye
 
 Know this space and watch over it.
 
 ## Product
 
-Space Memory ingests home walkthrough videos and uses AI to build and maintain an inventory of every room, item, and repair issue. Two core questions:
+PerifEye ingests home walkthrough videos and uses AI to build and maintain an inventory of every room, item, and repair issue. Two core questions:
 
 - **"Where was this item last seen?"** — location history across walkthroughs
 - **"What needs fixing?"** — repair punch list updated on each pass
 
-For full architecture, see [Space Memory MVP Architecture and 90-Day Plan](docs/space-memory-mvp-architecture.md).
+For full architecture, see [PerifEye MVP Architecture and 90-Day Plan](docs/perifeye-mvp-architecture.md).
 
 ## MVP Phase 1 — Canonical Pipeline (Days 1-30)
 

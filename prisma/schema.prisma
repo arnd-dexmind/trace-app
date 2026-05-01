@@ -8,6 +8,32 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ── Users & Auth ───────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String?
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenants UserTenant[]
+}
+
+model UserTenant {
+  id       String @id @default(cuid())
+  userId   String
+  tenantId String
+  role     String @default("member")
+
+  user   User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+}
+
 // ── Spaces ────────────────────────────────────────────────────────────────────
 
 model Space {
@@ -46,6 +72,7 @@ model Walkthrough {
   itemObservations   ItemObservation[]
   repairObservations RepairObservation[]
   reviewTasks        ReviewTask[]
+  processingJobs     ProcessingJob[]
 
   @@index([spaceId, status])
   @@index([tenantId])
@@ -115,15 +142,16 @@ model StorageLocation {
 // ── Inventory Items ───────────────────────────────────────────────────────────
 
 model InventoryItem {
-  id          String   @id @default(cuid())
-  spaceId     String
-  tenantId    String
-  name        String
-  category    String?
-  description String?
-  quantity    Int      @default(1)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  spaceId      String
+  tenantId     String
+  name         String
+  category     String?
+  description  String?
+  quantity     Int      @default(1)
+  searchVector Unsupported("tsvector")?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   space            Space               @relation(fields: [spaceId], references: [id])
   observations     ItemObservation[]
@@ -131,8 +159,26 @@ model InventoryItem {
   locationHistory  ItemLocationHistory[]
   repairIssues     RepairIssue[]
   reviewActions    ReviewAction[]
+  aliases          ItemAlias[]
 
   @@index([spaceId, name])
+  @@index([tenantId])
+}
+
+// ── Item Aliases ──────────────────────────────────────────────────────────────
+
+model ItemAlias {
+  id        String   @id @default(cuid())
+  itemId    String
+  tenantId  String
+  alias     String
+  source    String   @default("operator")
+  createdAt DateTime @default(now())
+
+  item InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@unique([itemId, alias])
+  @@index([itemId])
   @@index([tenantId])
 }
 
@@ -263,6 +309,29 @@ model ReviewTask {
   actions     ReviewAction[]
 
   @@unique([walkthroughId])
+  @@index([tenantId, status])
+}
+
+// ── Processing Jobs ───────────────────────────────────────────────────────────
+
+model ProcessingJob {
+  id            String    @id @default(cuid())
+  walkthroughId String
+  tenantId      String
+  stage         String
+  status        String    @default("pending")
+  attempt       Int       @default(1)
+  maxAttempts   Int       @default(3)
+  nextRetryAt   DateTime?
+  error         String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  walkthrough Walkthrough @relation(fields: [walkthroughId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([walkthroughId])
   @@index([tenantId, status])
 }
 

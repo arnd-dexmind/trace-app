@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getItem, type InventoryItem, type LocationHistoryEntry, getSpaceId } from "../api";
+import { getItem, type InventoryItem, type LocationHistoryEntry, type RepairIssue, getSpaceId } from "../api";
+import { Badge } from "../components/ui/Badge";
+import { EmptyState } from "../components/ui/EmptyState";
 
 export function ItemDetail() {
   const { itemId } = useParams<{ itemId: string }>();
@@ -133,6 +135,64 @@ export function ItemDetail() {
           ))}
         </div>
       )}
+
+      {/* Linked Repairs */}
+      {item.repairIssues && item.repairIssues.length > 0 && (
+        <div style={{ marginBottom: "var(--sm-space-8)" }}>
+          <h2 style={{ fontSize: "var(--sm-text-base)", fontWeight: 600, marginBottom: "var(--sm-space-4)" }}>
+            Linked Repairs ({item.repairIssues.length})
+          </h2>
+          {item.repairIssues.map((repair: RepairIssue) => (
+            <Link
+              key={repair.id}
+              to={`/repairs/${repair.id}`}
+              style={{ ...linkRow, textDecoration: "none", color: "inherit" }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "var(--sm-text-sm)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {repair.title}
+                </div>
+                <div style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)", marginTop: 2 }}>
+                  {new Date(repair.createdAt).toLocaleDateString()}
+                  {repair.severity && <> &middot; {repair.severity}</>}
+                </div>
+              </div>
+              <Badge variant={repair.status === "open" ? "status-open" : repair.status === "in_progress" ? "status-monitoring" : "status-resolved"}>
+                {repair.status}
+              </Badge>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {/* Observation Evidence (keyframes) */}
+      {item.identityLinks && item.identityLinks.some((l) => l.observation?.keyframeUrl) && (
+        <div style={{ marginBottom: "var(--sm-space-8)" }}>
+          <h2 style={{ fontSize: "var(--sm-text-base)", fontWeight: 600, marginBottom: "var(--sm-space-4)" }}>
+            Observation Evidence
+          </h2>
+          <div style={keyframeGrid}>
+            {item.identityLinks
+              .filter((l) => l.observation?.keyframeUrl)
+              .map((link) => (
+                <div key={link.id} style={keyframeCard}>
+                  <img
+                    src={link.observation!.keyframeUrl!}
+                    alt={link.observation?.label || "Keyframe"}
+                    style={keyframeImg}
+                    loading="lazy"
+                  />
+                  <div style={{ padding: "var(--sm-space-2) var(--sm-space-3)", fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)" }}>
+                    {link.observation?.label}
+                    {link.matchConfidence != null && (
+                      <> &middot; {Math.round(link.matchConfidence * 100)}% match</>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -250,4 +310,20 @@ const errorBanner: React.CSSProperties = {
   background: "var(--sm-danger-500)", color: "#fff",
   padding: "var(--sm-space-2) var(--sm-space-4)", borderRadius: "var(--sm-radius-md)",
   display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "var(--sm-text-sm)",
+};
+
+const keyframeGrid: React.CSSProperties = {
+  display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+  gap: "var(--sm-space-4)",
+};
+
+const keyframeCard: React.CSSProperties = {
+  border: "1px solid var(--sm-border-default)",
+  borderRadius: "var(--sm-radius-lg)", overflow: "hidden",
+  background: "var(--sm-surface-card)",
+};
+
+const keyframeImg: React.CSSProperties = {
+  width: "100%", height: 160, objectFit: "cover",
+  display: "block", background: "var(--sm-neutral-100)",
 };

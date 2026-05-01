@@ -1,6 +1,10 @@
 import { Router } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { db } from "../lib/db.js";
-import { requireTenant, sendApiError } from "../lib/errors.js";
+import { sendApiError } from "../lib/errors.js";
+import { createAuthMiddleware } from "../lib/auth.js";
+import { isUuid } from "../lib/validation.js";
+import type { PaginatedResult } from "../data.js";
 import {
   listReviewQueue,
   getReviewTask,
@@ -9,16 +13,40 @@ import {
 
 export const reviewRouter = Router();
 
-reviewRouter.use(requireTenant);
+reviewRouter.use(createAuthMiddleware());
+
+function respondPaginated<T>(res: Response, result: PaginatedResult<T>, req: Request) {
+  const hasPagination = "cursor" in req.query || "limit" in req.query;
+  if (hasPagination) {
+    res.status(200).json(result);
+  } else {
+    res.status(200).json(result.data);
+  }
+}
+
+function requireUuidParams(...names: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    for (const name of names) {
+      const val = req.params[name];
+      if (val && !isUuid(val)) {
+        sendApiError(res, 400, "BAD_REQUEST", `Invalid ${name} format`);
+        return;
+      }
+    }
+    next();
+  };
+}
 
 // ── Review Queue ──────────────────────────────────────────────────────────────
 
 reviewRouter.get("/queue", async (req, res) => {
   const status =
     typeof req.query.status === "string" ? req.query.status : undefined;
+  const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+  const limit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : undefined;
 
-  const tasks = await listReviewQueue(db, res.locals.tenantId, status);
-  res.status(200).json(tasks);
+  const result = await listReviewQueue(db, res.locals.tenantId, status, cursor, limit);
+  respondPaginated(res, result, req);
 });
 
 reviewRouter.get("/queue/:taskId", async (req, res) => {
@@ -34,7 +62,7 @@ reviewRouter.get("/queue/:taskId", async (req, res) => {
 
 const VALID_ACTIONS = ["accept", "reject", "merge", "relabel"];
 
-reviewRouter.post("/:taskId/actions", async (req, res) => {
+reviewRouter.post("/:taskId/actions", requireUuidParams("taskId"), async (req, res) => {
   const actionType = req.body?.actionType;
   if (!actionType || !VALID_ACTIONS.includes(actionType)) {
     sendApiError(

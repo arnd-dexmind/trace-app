@@ -1,9 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { extname, join } from "node:path";
-import { mkdirSync } from "node:fs";
+import { extname } from "node:path";
 import multer from "multer";
-
-const UPLOADS_DIR = join(process.cwd(), "uploads");
+import { storage as storageProvider } from "./storage.js";
 
 const ALLOWED_MIMETYPES = new Set([
   "image/jpeg",
@@ -16,17 +14,6 @@ const ALLOWED_MIMETYPES = new Set([
   "video/quicktime",
 ]);
 
-const storage = multer.diskStorage({
-  destination(_req, _file, cb) {
-    mkdirSync(UPLOADS_DIR, { recursive: true });
-    cb(null, UPLOADS_DIR);
-  },
-  filename(_req, file, cb) {
-    const ext = extname(file.originalname).toLowerCase() || ".bin";
-    cb(null, `${randomUUID()}${ext}`);
-  },
-});
-
 const fileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
   if (ALLOWED_MIMETYPES.has(file.mimetype)) {
     cb(null, true);
@@ -36,9 +23,23 @@ const fileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
 };
 
 export const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   fileFilter,
   limits: { fileSize: 50 * 1024 * 1024 },
 });
 
-export { UPLOADS_DIR };
+export async function handleUpload(file: Express.Multer.File, prefix: string) {
+  return storageProvider.upload({
+    buffer: file.buffer,
+    originalName: file.originalname,
+    mimetype: file.mimetype,
+    prefix,
+  });
+}
+
+export function generateStorageKey(prefix: string, originalName: string) {
+  const ext = extname(originalName).toLowerCase() || ".bin";
+  return `${prefix}/${randomUUID()}${ext}`;
+}
+
+export { storageProvider };

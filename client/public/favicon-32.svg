@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Eye shape — simplified for small size -->
+  <path d="M 4 16 C 5 8, 27 8, 28 16 C 27 24, 5 24, 4 16 Z"
+        stroke="#09090B" stroke-width="2" stroke-linejoin="round"/>
+
+  <!-- Iris -->
+  <circle cx="14" cy="16" r="7" fill="#4F46E5"/>
+
+  <!-- Pupil -->
+  <circle cx="14" cy="16" r="3.5" fill="#09090B"/>
+
+  <!-- Catchlight -->
+  <circle cx="12" cy="14" r="1.5" fill="#FFFFFF"/>
+
+  <!-- Single peripheral arc with node endpoint -->
+  <path d="M 18 10 C 23 10, 26 14, 25 18"
+        stroke="#4F46E5" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+  <circle cx="25" cy="18" r="1.5" fill="#4F46E5" opacity="0.7"/>
+</svg>

@@ -1,4 +1,4 @@
-# Space Memory MVP Architecture and 90-Day Plan
+# PerifEye MVP Architecture and 90-Day Plan
 
 ## Goal
 

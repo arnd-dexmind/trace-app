@@ -40,6 +40,7 @@ async function cleanDatabase() {
   await db.mediaAsset.deleteMany();
   await db.walkthrough.deleteMany();
   await db.repairIssue.deleteMany();
+  await db.itemAlias.deleteMany();
   await db.storageLocation.updateMany({ data: { parentId: null } });
   await db.storageLocation.deleteMany();
   await db.spaceZone.deleteMany();
