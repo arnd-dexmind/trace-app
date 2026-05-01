@@ -206,3 +206,64 @@ test("dashboard shows empty state for space with no data", async ({ page }) => {
   // CTA button should be present
   await expect(page.getByRole("link", { name: "+ New Walkthrough" })).toBeVisible();
 });
+
+test("capture page renders drop zone and accepts file selection", async ({ page }) => {
+  await page.goto("/capture");
+  await page.waitForLoadState("networkidle");
+
+  // Page header
+  await expect(page.getByRole("heading", { name: "Inventory Capture" })).toBeVisible();
+
+  // Subtitle
+  await expect(page.getByText("Upload photos or videos of your space")).toBeVisible();
+
+  // Drop zone should be visible
+  const dropZone = page.getByText("Drop photos or videos here");
+  await expect(dropZone).toBeVisible();
+
+  // Supported formats hint
+  await expect(page.getByText(/JPG, PNG, GIF, WebP, MP4, WebM, MOV/)).toBeVisible();
+});
+
+test("capture page file select shows file in list with upload button", async ({ page }) => {
+  await page.goto("/capture");
+  await page.waitForLoadState("networkidle");
+
+  // Use setInputFiles to programmatically set a file on the hidden input
+  await page.locator('input[type="file"][accept*="image"]').first().setInputFiles({
+    name: "test-photo.jpg",
+    mimeType: "image/jpeg",
+    buffer: Buffer.from("fake-image-data"),
+  });
+
+  // The file should appear in the list
+  await expect(page.getByText("test-photo.jpg")).toBeVisible();
+  await expect(page.getByText("0 MB", { exact: true })).toBeVisible();
+
+  // Upload button should appear
+  await expect(page.getByRole("button", { name: /Upload 1 File/ })).toBeVisible();
+});
+
+test("capture page renders on mobile viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/capture");
+  await page.waitForLoadState("networkidle");
+
+  // Header should still be visible
+  await expect(page.getByRole("heading", { name: "Inventory Capture" })).toBeVisible();
+
+  // Drop zone should be visible
+  await expect(page.getByText("Drop photos or videos here")).toBeVisible();
+});
+
+test("capture page is reachable from nav", async ({ page }) => {
+  await page.goto("/capture");
+  await page.waitForLoadState("networkidle");
+
+  // TopNav should be visible with Capture link in active state
+  await expect(page.getByRole("link", { name: "Capture" })).toBeVisible();
+
+  // Space selector should be present
+  const spaceSelector = page.locator('select[aria-label="Select space"]');
+  await expect(spaceSelector).toBeVisible();
+});

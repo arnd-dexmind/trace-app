@@ -117,6 +117,12 @@ export function TopNav() {
       >
         Upload
       </Link>
+      <Link
+        to="/capture"
+        style={navLinkStyle(isActive("/capture"))}
+      >
+        Capture
+      </Link>
 
       <div style={{ marginLeft: "auto", display: "flex", gap: "var(--sm-space-3)", alignItems: "center" }}>
         <select
