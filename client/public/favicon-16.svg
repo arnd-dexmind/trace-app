@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+  <!-- Solid eye silhouette -->
+  <path d="M 2 8 C 2.5 4, 13.5 4, 14 8 C 13.5 12, 2.5 12, 2 8 Z"
+        fill="#111827"/>
+
+  <!-- White pupil cutout for recognizability at tiny size -->
+  <circle cx="7" cy="8" r="2.5" fill="#FFFFFF"/>
+
+  <!-- Indigo accent dot — sole color cue -->
+  <circle cx="6" cy="7" r="1" fill="#4F46E5"/>
+</svg>

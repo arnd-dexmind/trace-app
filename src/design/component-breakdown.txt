@@ -1,0 +1,414 @@
+============================================================
+Space Memory — Component Breakdown for CTO Implementation
+============================================================
+Issue: TRAAAA-135
+Author: Jordan (Principal Product Designer)
+Date: 2026-04-29
+
+This document names every component, its props, states, and
+which prototype file to reference. Tokens are in tokens.css.
+All components use CSS custom properties (--sm-*) from tokens.
+
+Desktop viewports: 1025px+
+Tablet viewports: 641px–1024px
+Mobile viewports: <=640px
+
+============================================================
+DESIGN TOKENS
+============================================================
+
+File: src/design/tokens.css
+
+Contains:
+- Color palette (brand, neutral, semantic, surface, border)
+- Spacing scale (1..16 → 4px..64px)
+- Typography (sans/mono, xs..3xl, normal/bold)
+- Radii (sm/md/lg/xl/full)
+- Shadows (sm/md/lg)
+- Transitions (fast/normal)
+- Layout constants (sidebar width, header height, touch target)
+- Dark theme via prefers-color-scheme
+- Minimal utility classes
+
+============================================================
+COMPONENT TREE — OPERATOR CONSOLE
+============================================================
+
+Prototype: src/design/prototypes/operator-console.html
+
+ConsoleLayout
+  Grid: sidebar(280px) | main(1fr) | actions(320px)
+  On <=1024px: single-column with fixed actions overlay
+  On <=640px: queue panel max-height 40vh
+  ---
+  Props: none (page-level layout)
+  States: default, actions-open (mobile only)
+
+  ConsoleHeader
+    slot:left    — logo + space badge
+    slot:right   — walkthrough selector + batch-accept
+    ---
+    Props: spaceName, walkthroughOptions[], pendingBatchCount
+
+    WalkthroughSelect
+      Select for active walkthrough.
+      Props: options: {id, label}[], selected, onChange
+
+    BatchAcceptButton
+      Only visible when pendingBatchCount > 0.
+      Props: count, onClick
+
+  QueuePanel
+    Left sidebar. Three tabs.
+    ---
+    Props: pending[], inReview[], completed[]
+    States: tab=pending | inReview | completed
+
+    QueueTab
+      Props: label, count, selected, onClick
+      States: default, selected
+
+    CandidateCard
+      Queue item. Click selects it in the main panel.
+      Props: item, confidence, location, repairSummary, active
+      States: default, active
+      Sub-components: ConfidenceBadge
+
+      ConfidenceBadge
+        Props: score (0–100)
+        States: high (>=85%, green), medium (60–84%, yellow),
+                low (<60%, red)
+        Renders dot + percentage.
+
+  MainPanel
+    Center area. Shows selected candidate or empty state.
+    ---
+    States: empty (no candidate selected), detail (candidate selected)
+
+    EmptyState
+      Props: icon, message
+      Used when no candidate is selected.
+
+    CandidateDetail
+      Props: candidate { id, itemName, category, proposedLocation,
+              zone, storagePath, frameTimestamp, repairCategory,
+              repairSeverity, confidence, priorConfirmations,
+              locationHistory[], evidenceUrl }
+
+      EvidenceFrame
+        Props: imageUrl (or placeholder), frameNumber, zone
+        States: loaded, placeholder (no image available)
+        Aspect ratio: 16/9. Overlay badges at bottom.
+
+      DetailGrid
+        2-column grid (stacks to 1-col on mobile).
+        Each cell: label + value + optional sub-value.
+
+      LocationTimeline
+        Props: entries[] { date, location, note, tags[] }
+        Vertical timeline with dots.
+        Dot states: current (brand), moved (warning),
+                    resolved (success), default (neutral)
+        Tag sub-component: TagBadge (kind: confirmed|relocated|repair)
+
+  ActionsPanel
+    Right sidebar. Fixed overlay on mobile with toggle button.
+    ---
+    Props: candidate (same as CandidateDetail)
+    States: default, open (mobile)
+
+    QuickAccept
+      Only shown when confidence >= 90%.
+      Green callout with single confirm button.
+      Props: onConfirm
+
+    IdentityActions
+      Relabel select + Confirm/Mark Unseen buttons.
+      Props: itemOptions[], onConfirm, onMarkUnseen
+
+    LocationActions
+      Location correction select + Update button.
+      Props: locationOptions[], onUpdate
+
+    RepairActions
+      Three repair decisions: Accept/Downgrade/Reject.
+      Props: onAccept, onDowngrade, onReject
+
+    MergeActions
+      Merge-with select + Merge button.
+      Props: mergeOptions[], onMerge
+
+    ResolutionNote
+      Textarea + Mark Resolved button.
+      Props: onResolve
+
+    NavigationActions
+      Previous / Skip & Next buttons.
+      Props: onPrevious, onSkipNext
+
+  ActionsToggle (mobile only)
+    FAB button to open/close actions panel.
+    Props: open, onToggle
+
+  ActionsOverlay (mobile only)
+    Backdrop when actions panel is open.
+    Props: open, onClick (closes panel)
+
+============================================================
+COMPONENT TREE — ITEM SEARCH
+============================================================
+
+Prototype: src/design/prototypes/item-search.html
+
+  SearchPage
+    Shell: max-width 960px, centered.
+
+    TopNav
+      Logo + nav links (Items, Repairs, Walkthroughs, Upload).
+      Props: activeRoute
+
+    SearchBar
+      Text input with leading search icon.
+      Props: value, onChange, placeholder
+      States: default, focused, has-value
+
+      AutocompleteDropdown
+        Renders below the input.
+        Props: suggestions[] { icon, name, category, location },
+                focusedIndex, onSelect
+        States: open, closed
+        Keyboard: arrow up/down, enter to select, escape to close.
+
+        AutocompleteItem
+          Props: icon, name, category, focused
+
+    ResultsList
+      Props: results[], loading
+      States: loading, empty (no results), has-results
+
+      ResultCard
+        Link wrapping the result. Full-width clickable card.
+        Props: icon, name, category, location, status, lastSeenDate, href
+        States: default, hover
+        Sub: StatusDot (in-place green, moved yellow, missing red, unseen gray)
+        Sub: CategoryChip
+
+============================================================
+COMPONENT TREE — ITEM DETAIL
+============================================================
+
+Prototype: src/design/prototypes/item-detail.html
+
+  ItemDetailPage
+    Breadcrumb + full detail view.
+
+    TopNav (shared)
+
+    Breadcrumb
+      Props: segments[] { label, href }
+
+    ItemHeader
+      Props: name, status, category, itemId
+      Sub: StatusBadge
+
+    InfoGrid
+      2-column card showing category, status, lastSeen, firstCatalogued.
+      Props: item { category, status, lastSeenDate, lastSeenContext,
+              firstCataloguedDate }
+
+    LocationCard
+      Current location with zone, position, storage path.
+      Props: zone, position, storagePath
+
+    LocationTimeline
+      Same component as operator console — shared.
+      Props: entries[] { date, location, note, tags[] }
+
+    RelatedRepairs
+      Props: repairs[] { id, title, status, severity, detectedDate,
+              location, href }
+      States: has-repairs, empty
+
+      RepairRow
+        Link wrapping. Shows status badge, severity badge, title, meta.
+        Props: status, severity, title, meta, href
+
+============================================================
+COMPONENT TREE — REPAIR LIST
+============================================================
+
+Prototype: src/design/prototypes/repair-list.html
+
+  RepairListPage
+    TopNav + filter bar + table (desktop) / cards (mobile).
+
+    TopNav (shared)
+
+    FilterBar
+      Props: filters[] { label, count, active }, activeFilter,
+             sortOptions[], activeSort, onFilterChange, onSortChange
+      Renders pill buttons for filters, separator, sort dropdown.
+      On mobile: sort hidden, separator hidden.
+
+    RepairTable (desktop >= 769px)
+      Standard <table> with columns: Issue, Location, Detected, Severity, Status.
+      Props: repairs[], onRowClick
+
+    RepairCards (mobile <= 768px)
+      Stack of RepairCard components.
+      Same data as table, but card layout.
+
+    RepairCard
+      Props: title, itemName, location, date, severity, status
+      States: default, hover
+
+    StatusBadge
+      Props: status (open|monitoring|resolved)
+      Distinct color per status.
+
+    SeverityBadge
+      Props: severity (high|medium|low)
+      Distinct color per severity.
+
+============================================================
+COMPONENT TREE — UPLOAD FLOW
+============================================================
+
+Prototype: src/design/prototypes/upload.html
+
+  UploadPage
+    Shell: max-width 640px, centered.
+
+    TopNav (shared)
+
+    SpaceSelector
+      Select dropdown that chooses target space.
+      Props: spaces[], selected, onChange
+
+    UploadFlow (state machine)
+      States: idle → selected → processing → complete | error
+
+      IdleState
+        DropZone with icon, title, hint, format info.
+        Also renders hidden <input type="file">.
+
+        DropZone
+          Props: onFileSelect
+          States: default, drag-over
+          Handles: click to browse, dragover/dragleave/drop events.
+          Accepts: video/mp4, video/quicktime, application/zip.
+
+      SelectedState
+        Shows selected file info + Upload button.
+
+        SelectedFile
+          Props: name, size, onRemove
+          File icon, name (truncated), size, remove button.
+
+      ProcessingState
+        ProgressBar + stage list.
+
+        ProgressBar
+          Props: percent, label
+          Track + fill. Fill animates via CSS transition.
+
+        ProcessingStages
+          List of StageItem components.
+          Stages: Upload video, Extract frames, AI item detection,
+                  Review queue ready.
+
+          StageItem
+            Props: label, state (pending|active|done)
+            Icon states: pending (empty circle), active (pulsing brand),
+                         done (green check)
+
+      CompleteState
+        ResultCard (success variant) with stats and CTA buttons.
+        Stats: items detected, pending review, repairs flagged.
+        CTAs: Open in Operator Console, Upload Another.
+
+      ErrorState
+        ResultCard (error variant) with message + Try Again button.
+
+============================================================
+SHARED / UTILITY COMPONENTS
+============================================================
+
+These are reused across multiple views:
+
+  TopNav
+    Used in: Search, Detail, RepairList, Upload
+    Props: activeRoute ('items'|'repairs'|'walkthroughs'|'upload')
+
+  StatusBadge
+    Used in: Console, Detail, RepairList
+    Props: status, size ('sm'|'md')
+    Variants: open, monitoring, resolved, in-place, moved, missing, unseen
+
+  ConfidenceBadge
+    Used in: Console
+    Props: score (0–100)
+    Renders dot + percentage. Color-coded by threshold.
+
+  SeverityBadge
+    Used in: Console, RepairList
+    Props: severity (high|medium|low)
+
+  CategoryChip
+    Used in: Search, Detail
+    Props: category
+
+  StatusDot
+    Used in: Search, Detail
+    Props: status (in-place|moved|missing|unseen)
+    8×8px colored circle.
+
+  LocationTimeline
+    Used in: Console, Detail
+    Props: entries[] { date, location, note, tags[] }
+    Vertical timeline with connector line and dots.
+
+  EmptyState
+    Used in: Console, Search, RepairList
+    Props: icon, message
+
+============================================================
+IMPLEMENTATION NOTES
+============================================================
+
+1. FRAMEWORK
+   - Components are framework-agnostic. The prototypes are vanilla HTML/CSS.
+   - If adopting React: each section under COMPONENT TREE maps to a
+     component file (e.g., ConsoleLayout.tsx, QueuePanel.tsx).
+   - If staying server-rendered: use the same CSS token system with
+     template partials matching the component breakdown above.
+
+2. MOBILE-FIRST
+   - All prototypes use min-width media queries (mobile-first).
+   - Touch targets are minimum 44px (--sm-touch-target).
+   - Operator console collapses to single-column on tablet/mobile
+     with a fixed overlay for the actions panel.
+
+3. ACCESSIBILITY
+   - Focus indicators on all interactive elements (btn:focus-visible).
+   - ARIA labels on icon-only buttons (aria-label).
+   - Role attributes on composite widgets (tablist, tab, combobox, listbox).
+   - Skip link recommended for operator console.
+   - Color is never the sole indicator — all badges include text labels.
+
+4. AUDIT TRAIL
+   - Every operator action records: timestamp, operator ID, action type,
+     previous value, new value, evidence note.
+   - LocationTimeline entries link to the specific walkthrough + frame
+     that produced the location observation.
+
+5. DATA CONTRACTS
+   - Candidate: { id, itemId, itemName, category, proposedLocation,
+     zone, storagePath, frameNumber, frameTimestamp, repairCategory,
+     repairSeverity, confidence, priorConfirmations, locationHistory,
+     evidenceUrl }
+   - Item: { id, name, category, status, lastSeenDate, lastSeenContext,
+     firstCataloguedDate, zone, position, storagePath }
+   - Repair: { id, itemId, itemName, title, status, severity,
+     location, detectedDate, resolvedDate }
+   - LocationEntry: { date, location, note, tags: ('confirmed'|'relocated'|'repair'|'catalogued')[] }

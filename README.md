@@ -1,29 +1,40 @@
-# trace-app
+# PerifEye
 
-MVP repository for the Trace product.
+Know this space and watch over it.
 
-## Current state
+## Product
 
-This repository was provisioned from an empty upstream and is being bootstrapped under `TRAAAA-72`.
+PerifEye ingests home walkthrough videos and uses AI to build and maintain an inventory of every room, item, and repair issue. Two core questions:
 
-## MVP focus
+- **"Where was this item last seen?"** — location history across walkthroughs
+- **"What needs fixing?"** — repair punch list updated on each pass
 
-- establish a deployable web/API foundation
-- add persistence + migrations
-- ship first vertical slice for trace record create/list
+For full architecture, see [PerifEye MVP Architecture and 90-Day Plan](docs/perifeye-mvp-architecture.md).
+
+## MVP Phase 1 — Canonical Pipeline (Days 1-30)
+
+- Walkthrough upload with processing lifecycle
+- AI-assisted extraction of items, locations, and repair candidates
+- Operator review console for quality control
+- Searchable inventory with location history
+- Repair issue tracking
 
 ## Quick start
 
-1. Install Node.js 20+.
-2. Install dependencies:
-   - `npm install`
-3. Run local checks:
-   - `npm run lint`
-   - `npm run typecheck`
-   - `npm run test`
+1. Node.js 20+
+2. `npm install`
+3. `npm run db:generate && npm run db:migrate:deploy`
+4. `npm run db:seed` (optional demo data)
+5. `npm run dev`
+5. Local checks: `npm run lint && npm run typecheck && npm run test`
+
+## Stack
+
+- TypeScript, Express, Prisma, PostgreSQL
+- Object storage for video and frame evidence
 
 ## Repo conventions
 
-- TypeScript-first codebase
-- quality gates via lint/typecheck/test/build
-- incremental delivery tracked in Paperclip child issues
+- TypeScript-first, strict types
+- Quality gates via lint/typecheck/test/build
+- Incremental delivery tracked in Paperclip child issues

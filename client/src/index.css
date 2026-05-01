@@ -1,0 +1,11 @@
+@import "./tokens.css";
+
+body {
+  font-family: var(--sm-font-sans);
+  font-size: var(--sm-text-base);
+  line-height: var(--sm-leading-normal);
+  color: var(--sm-text-primary);
+  background: var(--sm-surface-page);
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+}

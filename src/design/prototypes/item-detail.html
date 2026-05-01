@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Fire Extinguisher #FE-042 — PerifEye</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+  .app-shell {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 var(--sm-space-4);
+  }
+
+  /* --- Top nav --- */
+  .top-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-4) 0;
+    border-bottom: 1px solid var(--sm-border-default);
+    margin-bottom: var(--sm-space-6);
+  }
+  .top-nav .logo {
+    font-size: var(--sm-text-lg);
+    font-weight: var(--sm-font-bold);
+    color: var(--sm-text-primary);
+    text-decoration: none;
+  }
+  .top-nav .nav-link {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-secondary);
+    text-decoration: none;
+    padding: var(--sm-space-1) var(--sm-space-2);
+    border-radius: var(--sm-radius-md);
+  }
+  .top-nav .nav-link:hover { color: var(--sm-text-primary); background: var(--sm-neutral-100); }
+  .top-nav .nav-link.active { color: var(--sm-brand-600); }
+
+  /* --- Breadcrumb --- */
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-2);
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+    margin-bottom: var(--sm-space-6);
+  }
+  .breadcrumb a { color: var(--sm-text-link); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb .sep { color: var(--sm-text-tertiary); }
+
+  /* --- Detail header --- */
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--sm-space-4);
+    margin-bottom: var(--sm-space-8);
+    flex-wrap: wrap;
+  }
+  .detail-header h1 {
+    font-size: var(--sm-text-2xl);
+    font-weight: var(--sm-font-bold);
+    margin-bottom: var(--sm-space-1);
+  }
+  .detail-header .dh-subtitle {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+  }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 2px 8px;
+    border-radius: var(--sm-radius-full);
+    margin-bottom: var(--sm-space-2);
+  }
+  .status-badge.in-place { background: #dcfce7; color: var(--sm-success-700); }
+  .status-badge.moved { background: #fef3c7; color: #92400e; }
+
+  /* --- Info grid --- */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sm-space-4);
+    margin-bottom: var(--sm-space-8);
+    padding: var(--sm-space-6);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-xl);
+    background: var(--sm-surface-card);
+  }
+  .info-item .label {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--sm-space-1);
+  }
+  .info-item .value {
+    font-size: var(--sm-text-base);
+    font-weight: var(--sm-font-medium);
+  }
+  .info-item .value.sub {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+    font-weight: var(--sm-font-normal);
+  }
+  .category-chip {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 1px 8px;
+    border-radius: var(--sm-radius-full);
+    background: var(--sm-neutral-100);
+    color: var(--sm-text-secondary);
+  }
+
+  /* --- Current location card --- */
+  .location-card {
+    padding: var(--sm-space-6);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-xl);
+    margin-bottom: var(--sm-space-8);
+    background: var(--sm-surface-card);
+  }
+  .location-card h2 {
+    font-size: var(--sm-text-base);
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: var(--sm-space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-2);
+  }
+  .location-detail {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--sm-space-4);
+  }
+  .location-detail .ld-item .label {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--sm-space-1);
+  }
+  .location-detail .ld-item .value {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+  }
+
+  /* --- Timeline --- */
+  .timeline-section {
+    margin-bottom: var(--sm-space-8);
+  }
+  .timeline-section h2 {
+    font-size: var(--sm-text-base);
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: var(--sm-space-6);
+  }
+  .timeline {
+    position: relative;
+    padding-left: var(--sm-space-6);
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 4px;
+    bottom: 4px;
+    width: 2px;
+    background: var(--sm-border-default);
+  }
+  .timeline-item {
+    position: relative;
+    padding-bottom: var(--sm-space-6);
+  }
+  .timeline-item:last-child { padding-bottom: 0; }
+  .timeline-dot {
+    position: absolute;
+    left: calc(-1 * var(--sm-space-6) + 2px);
+    top: 4px;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--sm-neutral-400);
+    background: var(--sm-surface-card);
+    z-index: 1;
+  }
+  .timeline-dot.current { border-color: var(--sm-brand-500); background: var(--sm-brand-500); }
+  .timeline-dot.moved { border-color: var(--sm-warning-400); background: var(--sm-warning-400); }
+  .timeline-dot.resolved { border-color: var(--sm-success-500); background: var(--sm-success-500); }
+  .timeline-body .tl-date {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+    margin-bottom: 2px;
+  }
+  .timeline-body .tl-location {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+  }
+  .timeline-body .tl-note {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+    margin-top: 2px;
+  }
+  .timeline-body .tl-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 0 6px;
+    border-radius: var(--sm-radius-full);
+    margin-left: var(--sm-space-2);
+  }
+  .tl-tag.confirmed { background: var(--sm-brand-50); color: var(--sm-brand-700); }
+  .tl-tag.relocated { background: #fef3c7; color: #92400e; }
+  .tl-tag.repair { background: #fee2e2; color: #991b1b; }
+
+  /* --- Related repairs --- */
+  .repairs-section {
+    margin-bottom: var(--sm-space-8);
+  }
+  .repairs-section h2 {
+    font-size: var(--sm-text-base);
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: var(--sm-space-4);
+  }
+  .repair-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-4);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-md);
+    margin-bottom: var(--sm-space-2);
+    text-decoration: none;
+    color: inherit;
+    transition: box-shadow var(--sm-transition-fast);
+  }
+  .repair-row:hover { box-shadow: var(--sm-shadow-sm); }
+  .repair-row .rr-body { flex: 1; }
+  .repair-row .rr-title {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: 2px;
+  }
+  .repair-row .rr-meta { font-size: var(--sm-text-xs); color: var(--sm-text-secondary); }
+  .repair-row .rr-arrow { color: var(--sm-text-tertiary); }
+  .repair-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 2px 8px;
+    border-radius: var(--sm-radius-full);
+    flex-shrink: 0;
+  }
+  .repair-status.open { background: #fef3c7; color: #92400e; }
+  .repair-status.monitoring { background: #dbeafe; color: #1e40af; }
+  .repair-status.resolved { background: #dcfce7; color: #166534; }
+  .repair-row .rr-severity {
+    font-size: 11px;
+    font-weight: var(--sm-font-semibold);
+    padding: 1px 6px;
+    border-radius: var(--sm-radius-sm);
+    flex-shrink: 0;
+  }
+  .rr-severity.high { background: #fee2e2; color: var(--sm-danger-700); }
+  .rr-severity.medium { background: #fef9c3; color: var(--sm-warning-600); }
+
+  @media (max-width: 640px) {
+    .info-grid { grid-template-columns: 1fr; padding: var(--sm-space-4); }
+    .location-detail { grid-template-columns: 1fr; }
+    .detail-header h1 { font-size: var(--sm-text-xl); }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- ===== Top Nav ===== -->
+  <nav class="top-nav">
+    <a href="#" class="logo">PerifEye</a>
+    <a href="item-search.html" class="nav-link active">Items</a>
+    <a href="repair-list.html" class="nav-link">Repairs</a>
+    <a href="#" class="nav-link">Walkthroughs</a>
+    <a href="upload.html" class="nav-link">Upload</a>
+  </nav>
+
+  <!-- ===== Breadcrumb ===== -->
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="item-search.html">Items</a>
+    <span class="sep">&#8250;</span>
+    <span>Fire Extinguisher #FE-042</span>
+  </nav>
+
+  <!-- ===== Header ===== -->
+  <div class="detail-header">
+    <div>
+      <span class="status-badge in-place"><span class="status-dot in-place" style="width:8px;height:8px;border-radius:50%;display:inline-block;"></span> In place</span>
+      <h1>Fire Extinguisher #FE-042</h1>
+      <p class="dh-subtitle">ID: item_fe042 &middot; <span class="category-chip">Safety Equipment</span></p>
+    </div>
+  </div>
+
+  <!-- ===== Info Grid ===== -->
+  <div class="info-grid">
+    <div class="info-item">
+      <div class="label">Category</div>
+      <div class="value">Safety Equipment</div>
+    </div>
+    <div class="info-item">
+      <div class="label">Status</div>
+      <div class="value">In place</div>
+      <div class="value sub">Consistently found since Mar 14, 2026</div>
+    </div>
+    <div class="info-item">
+      <div class="label">Last Seen</div>
+      <div class="value">Apr 29, 2026 at 09:42</div>
+      <div class="value sub">Walkthrough A-12 &middot; Frame 00:42:18</div>
+    </div>
+    <div class="info-item">
+      <div class="label">First Catalogued</div>
+      <div class="value">Mar 14, 2026</div>
+      <div class="value sub">Initial space audit walkthrough</div>
+    </div>
+  </div>
+
+  <!-- ===== Current Location ===== -->
+  <div class="location-card">
+    <h2>&#128205; Current Location</h2>
+    <div class="location-detail">
+      <div class="ld-item">
+        <div class="label">Zone</div>
+        <div class="value">Zone 3-A</div>
+      </div>
+      <div class="ld-item">
+        <div class="label">Position</div>
+        <div class="value">Wall Mount East</div>
+      </div>
+      <div class="ld-item">
+        <div class="label">Storage Path</div>
+        <div class="value">A / 3 / Wall-E</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Location History Timeline ===== -->
+  <div class="timeline-section">
+    <h2>Location History</h2>
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-dot current"></div>
+        <div class="timeline-body">
+          <div class="tl-date">Apr 29, 2026 09:42 — Walkthrough A-12</div>
+          <div class="tl-location">Zone 3-A — Wall Mount East</div>
+          <div class="tl-note">
+            AI confidence 96%
+            <span class="tl-tag confirmed">Operator Confirmed</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-body">
+          <div class="tl-date">Apr 14, 2026 14:15 — Walkthrough A-11</div>
+          <div class="tl-location">Zone 3-A — Wall Mount East</div>
+          <div class="tl-note">AI confidence 94% <span class="tl-tag confirmed">Operator Confirmed</span></div>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot moved"></div>
+        <div class="timeline-body">
+          <div class="tl-date">Mar 28, 2026 10:30 — Walkthrough A-10</div>
+          <div class="tl-location">Zone 3-A — Wall Mount West</div>
+          <div class="tl-note">
+            Relocated from Wall East
+            <span class="tl-tag relocated">Relocated</span>
+            <span class="tl-tag confirmed">Operator Confirmed</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-body">
+          <div class="tl-date">Mar 14, 2026 — Initial Audit</div>
+          <div class="tl-location">Zone 3-A — Wall Mount East</div>
+          <div class="tl-note">Original placement <span class="tl-tag confirmed">Catalogued</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Related Repairs ===== -->
+  <div class="repairs-section">
+    <h2>Related Repair Issues</h2>
+
+    <a href="#" class="repair-row">
+      <span class="repair-status open">Open</span>
+      <span class="rr-severity medium">Medium</span>
+      <div class="rr-body">
+        <div class="rr-title">Missing inspection tag</div>
+        <div class="rr-meta">Detected Apr 29, 2026 &middot; Zone 3-A</div>
+      </div>
+      <span class="rr-arrow">&#8594;</span>
+    </a>
+
+    <a href="#" class="repair-row">
+      <span class="repair-status resolved">Resolved</span>
+      <span class="rr-severity medium">Medium</span>
+      <div class="rr-body">
+        <div class="rr-title">Pressure gauge reading low</div>
+        <div class="rr-meta">Detected Mar 28, 2026 &middot; Resolved Apr 14 &middot; Zone 3-A</div>
+      </div>
+      <span class="rr-arrow">&#8594;</span>
+    </a>
+  </div>
+</div>
+
+</body>
+</html>

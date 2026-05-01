@@ -1,0 +1,200 @@
+/* === PerifEye Design Tokens ===
+   Mobile-web first. Light theme default; dark theme via media query.
+   Token naming: --sm-{category}-{name}[-{variant}] */
+
+:root {
+  /* --- Color: Brand --- */
+  --sm-brand-50: #eff6ff;
+  --sm-brand-100: #dbeafe;
+  --sm-brand-200: #bfdbfe;
+  --sm-brand-300: #93c5fd;
+  --sm-brand-400: #60a5fa;
+  --sm-brand-500: #3b82f6;
+  --sm-brand-600: #2563eb;
+  --sm-brand-700: #1d4ed8;
+  --sm-brand-800: #1e40af;
+  --sm-brand-900: #1e3a8a;
+
+  /* --- Color: Neutral (slate) --- */
+  --sm-neutral-50: #f8fafc;
+  --sm-neutral-100: #f1f5f9;
+  --sm-neutral-200: #e2e8f0;
+  --sm-neutral-300: #cbd5e1;
+  --sm-neutral-400: #94a3b8;
+  --sm-neutral-500: #64748b;
+  --sm-neutral-600: #475569;
+  --sm-neutral-700: #334155;
+  --sm-neutral-800: #1e293b;
+  --sm-neutral-900: #0f172a;
+
+  /* --- Color: Semantic --- */
+  --sm-success-500: #22c55e;
+  --sm-success-600: #16a34a;
+  --sm-success-700: #15803d;
+  --sm-warning-400: #facc15;
+  --sm-warning-500: #eab308;
+  --sm-warning-600: #ca8a04;
+  --sm-danger-500: #ef4444;
+  --sm-danger-600: #dc2626;
+  --sm-danger-700: #b91c1c;
+  --sm-info-500: #06b6d4;
+  --sm-info-600: #0891b2;
+
+  /* --- Color: Surface --- */
+  --sm-surface-page: #ffffff;
+  --sm-surface-card: #ffffff;
+  --sm-surface-sidebar: var(--sm-neutral-50);
+  --sm-surface-elevated: #ffffff;
+  --sm-surface-overlay: rgba(15, 23, 42, 0.5);
+
+  /* --- Color: Text --- */
+  --sm-text-primary: var(--sm-neutral-900);
+  --sm-text-secondary: var(--sm-neutral-600);
+  --sm-text-tertiary: var(--sm-neutral-400);
+  --sm-text-inverse: #ffffff;
+  --sm-text-link: var(--sm-brand-600);
+
+  /* --- Color: Border --- */
+  --sm-border-default: var(--sm-neutral-200);
+  --sm-border-strong: var(--sm-neutral-300);
+  --sm-border-focus: var(--sm-brand-500);
+
+  /* --- Spacing scale (4px base) --- */
+  --sm-space-1: 4px;
+  --sm-space-2: 8px;
+  --sm-space-3: 12px;
+  --sm-space-4: 16px;
+  --sm-space-5: 20px;
+  --sm-space-6: 24px;
+  --sm-space-8: 32px;
+  --sm-space-10: 40px;
+  --sm-space-12: 48px;
+  --sm-space-16: 64px;
+
+  /* --- Typography: Font --- */
+  --sm-font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --sm-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* --- Typography: Size --- */
+  --sm-text-xs: 0.75rem;    /* 12px */
+  --sm-text-sm: 0.875rem;   /* 14px */
+  --sm-text-base: 1rem;     /* 16px */
+  --sm-text-lg: 1.125rem;   /* 18px */
+  --sm-text-xl: 1.25rem;    /* 20px */
+  --sm-text-2xl: 1.5rem;    /* 24px */
+  --sm-text-3xl: 1.875rem;  /* 30px */
+
+  /* --- Typography: Weight --- */
+  --sm-font-normal: 400;
+  --sm-font-medium: 500;
+  --sm-font-semibold: 600;
+  --sm-font-bold: 700;
+
+  /* --- Typography: Leading --- */
+  --sm-leading-tight: 1.25;
+  --sm-leading-normal: 1.5;
+  --sm-leading-relaxed: 1.625;
+
+  /* --- Radii --- */
+  --sm-radius-sm: 4px;
+  --sm-radius-md: 6px;
+  --sm-radius-lg: 8px;
+  --sm-radius-xl: 12px;
+  --sm-radius-full: 9999px;
+
+  /* --- Shadows --- */
+  --sm-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --sm-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --sm-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+
+  /* --- Transitions --- */
+  --sm-transition-fast: 150ms ease;
+  --sm-transition-normal: 200ms ease;
+
+  /* --- Layout --- */
+  --sm-sidebar-width: 280px;
+  --sm-actions-width: 320px;
+  --sm-header-height: 56px;
+  --sm-touch-target: 44px;
+}
+
+/* --- Dark theme --- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sm-surface-page: var(--sm-neutral-900);
+    --sm-surface-card: var(--sm-neutral-800);
+    --sm-surface-sidebar: var(--sm-neutral-900);
+    --sm-surface-elevated: var(--sm-neutral-800);
+    --sm-surface-overlay: rgba(0, 0, 0, 0.6);
+
+    --sm-text-primary: var(--sm-neutral-50);
+    --sm-text-secondary: var(--sm-neutral-400);
+    --sm-text-tertiary: var(--sm-neutral-500);
+
+    --sm-border-default: var(--sm-neutral-700);
+    --sm-border-strong: var(--sm-neutral-600);
+
+    --sm-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --sm-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --sm-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* --- Reset / Base --- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--sm-font-sans);
+  font-size: var(--sm-text-base);
+  line-height: var(--sm-leading-normal);
+  color: var(--sm-text-primary);
+  background: var(--sm-surface-page);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Utility classes (Tailwind-like minimal set) --- */
+.sm-flex { display: flex; }
+.sm-flex-col { flex-direction: column; }
+.sm-flex-1 { flex: 1; }
+.sm-items-center { align-items: center; }
+.sm-justify-between { justify-content: space-between; }
+.sm-gap-2 { gap: var(--sm-space-2); }
+.sm-gap-3 { gap: var(--sm-space-3); }
+.sm-gap-4 { gap: var(--sm-space-4); }
+.sm-gap-6 { gap: var(--sm-space-6); }
+
+.sm-text-sm { font-size: var(--sm-text-sm); }
+.sm-text-xs { font-size: var(--sm-text-xs); }
+.sm-text-lg { font-size: var(--sm-text-lg); }
+.sm-text-xl { font-size: var(--sm-text-xl); }
+.sm-text-2xl { font-size: var(--sm-text-2xl); }
+
+.sm-font-medium { font-weight: var(--sm-font-medium); }
+.sm-font-semibold { font-weight: var(--sm-font-semibold); }
+.sm-font-bold { font-weight: var(--sm-font-bold); }
+
+.sm-text-secondary { color: var(--sm-text-secondary); }
+.sm-text-tertiary { color: var(--sm-text-tertiary); }
+
+.sm-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sm-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}

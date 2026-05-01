@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Operator Console — PerifEye</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+  /* === Console Layout === */
+  .console {
+    display: grid;
+    grid-template-columns: var(--sm-sidebar-width) 1fr var(--sm-actions-width);
+    grid-template-rows: var(--sm-header-height) 1fr;
+    grid-template-areas:
+      "header header header"
+      "queue   main   actions";
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* --- Header --- */
+  .console-header {
+    grid-area: header;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--sm-space-6);
+    background: var(--sm-surface-card);
+    border-bottom: 1px solid var(--sm-border-default);
+    gap: var(--sm-space-4);
+  }
+  .console-header h1 {
+    font-size: var(--sm-text-lg);
+    font-weight: var(--sm-font-semibold);
+  }
+  .header-actions { display: flex; gap: var(--sm-space-2); align-items: center; }
+  .header-badge {
+    font-size: var(--sm-text-xs);
+    font-weight: var(--sm-font-medium);
+    padding: 2px 8px;
+    border-radius: var(--sm-radius-full);
+    background: var(--sm-brand-100);
+    color: var(--sm-brand-700);
+  }
+  .ws-select {
+    font: inherit;
+    font-size: var(--sm-text-sm);
+    padding: 4px 8px;
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-surface-card);
+    color: var(--sm-text-primary);
+    min-width: 180px;
+  }
+
+  /* --- Queue Panel (left) --- */
+  .queue-panel {
+    grid-area: queue;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--sm-border-default);
+    background: var(--sm-surface-sidebar);
+    overflow: hidden;
+  }
+  .queue-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--sm-border-default);
+  }
+  .queue-tab {
+    flex: 1;
+    padding: var(--sm-space-3) var(--sm-space-2);
+    font-size: var(--sm-text-xs);
+    font-weight: var(--sm-font-medium);
+    text-align: center;
+    border: none;
+    background: none;
+    color: var(--sm-text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color var(--sm-transition-fast), border-color var(--sm-transition-fast);
+  }
+  .queue-tab[aria-selected="true"] {
+    color: var(--sm-brand-600);
+    border-bottom-color: var(--sm-brand-600);
+  }
+  .queue-tab:hover { color: var(--sm-text-primary); }
+  .queue-tab .count {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 6px;
+    font-size: 10px;
+    border-radius: var(--sm-radius-full);
+    background: var(--sm-neutral-200);
+    color: var(--sm-text-secondary);
+  }
+  .queue-tab[aria-selected="true"] .count {
+    background: var(--sm-brand-100);
+    color: var(--sm-brand-700);
+  }
+
+  .queue-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--sm-space-2);
+  }
+
+  /* Queue card */
+  .candidate-card {
+    padding: var(--sm-space-3);
+    margin-bottom: var(--sm-space-2);
+    border-radius: var(--sm-radius-md);
+    border: 1px solid var(--sm-border-default);
+    background: var(--sm-surface-card);
+    cursor: pointer;
+    transition: box-shadow var(--sm-transition-fast);
+  }
+  .candidate-card:hover { box-shadow: var(--sm-shadow-sm); }
+  .candidate-card.active {
+    border-color: var(--sm-brand-400);
+    box-shadow: 0 0 0 1px var(--sm-brand-400);
+  }
+  .candidate-card .cc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--sm-space-2);
+    margin-bottom: var(--sm-space-1);
+  }
+  .candidate-card .cc-item {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-semibold);
+  }
+  .candidate-card .cc-location {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-secondary);
+  }
+  .candidate-card .cc-meta {
+    display: flex;
+    gap: var(--sm-space-2);
+    align-items: center;
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+  }
+
+  /* Confidence badge */
+  .confidence {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 11px;
+    font-weight: var(--sm-font-semibold);
+    padding: 1px 6px;
+    border-radius: var(--sm-radius-full);
+  }
+  .confidence.high { background: #dcfce7; color: var(--sm-success-700); }
+  .confidence.medium { background: #fef9c3; color: var(--sm-warning-600); }
+  .confidence.low { background: #fee2e2; color: var(--sm-danger-700); }
+  .confidence-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .confidence.high .confidence-dot { background: var(--sm-success-500); }
+  .confidence.medium .confidence-dot { background: var(--sm-warning-400); }
+  .confidence.low .confidence-dot { background: var(--sm-danger-500); }
+
+  /* --- Main Panel (center) --- */
+  .main-panel {
+    grid-area: main;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .main-panel .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--sm-text-tertiary);
+    text-align: center;
+    padding: var(--sm-space-8);
+  }
+  .main-panel .empty-state .icon {
+    font-size: 48px;
+    margin-bottom: var(--sm-space-4);
+  }
+  .main-panel .empty-state p {
+    max-width: 320px;
+    font-size: var(--sm-text-sm);
+  }
+
+  .candidate-detail {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: var(--sm-space-6);
+  }
+  .cd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--sm-space-6);
+    flex-wrap: wrap;
+    gap: var(--sm-space-3);
+  }
+  .cd-title h2 { font-size: var(--sm-text-xl); margin-bottom: var(--sm-space-1); }
+  .cd-title .cd-meta { font-size: var(--sm-text-sm); color: var(--sm-text-secondary); }
+
+  /* Evidence frame */
+  .evidence-frame {
+    border-radius: var(--sm-radius-lg);
+    border: 1px solid var(--sm-border-default);
+    overflow: hidden;
+    margin-bottom: var(--sm-space-6);
+    background: var(--sm-neutral-100);
+    aspect-ratio: 16 / 9;
+    position: relative;
+  }
+  .evidence-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .evidence-frame .placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--sm-text-tertiary);
+    font-size: var(--sm-text-sm);
+  }
+  .evidence-overlay {
+    position: absolute;
+    bottom: var(--sm-space-3);
+    left: var(--sm-space-3);
+    right: var(--sm-space-3);
+    display: flex;
+    gap: var(--sm-space-2);
+  }
+  .evidence-badge {
+    font-size: var(--sm-text-xs);
+    padding: 3px 8px;
+    border-radius: var(--sm-radius-sm);
+    background: rgba(0,0,0,0.65);
+    color: #fff;
+    backdrop-filter: blur(4px);
+  }
+
+  /* Detail grid */
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sm-space-4);
+    margin-bottom: var(--sm-space-6);
+  }
+  .detail-item { }
+  .detail-item .label {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--sm-space-1);
+  }
+  .detail-item .value {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+  }
+  .detail-item .value.sub { color: var(--sm-text-secondary); font-weight: var(--sm-font-normal); }
+
+  /* History timeline */
+  .timeline { margin-bottom: var(--sm-space-6); }
+  .timeline h3 {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: var(--sm-space-3);
+    color: var(--sm-text-secondary);
+  }
+  .timeline-item {
+    display: flex;
+    gap: var(--sm-space-3);
+    padding-bottom: var(--sm-space-3);
+    position: relative;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 18px;
+    bottom: 0;
+    width: 2px;
+    background: var(--sm-border-default);
+  }
+  .timeline-item:last-child::before { display: none; }
+  .timeline-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--sm-neutral-400);
+    background: var(--sm-surface-card);
+    flex-shrink: 0;
+    margin-top: 3px;
+    z-index: 1;
+  }
+  .timeline-dot.current { border-color: var(--sm-brand-500); background: var(--sm-brand-500); }
+  .timeline-body { font-size: var(--sm-text-sm); }
+  .timeline-body .date { font-size: var(--sm-text-xs); color: var(--sm-text-tertiary); }
+
+  /* --- Actions Panel (right) --- */
+  .actions-panel {
+    grid-area: actions;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--sm-border-default);
+    background: var(--sm-surface-sidebar);
+    overflow-y: auto;
+    padding: var(--sm-space-4);
+  }
+  .actions-panel h3 {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: var(--sm-space-4);
+  }
+  .action-group {
+    margin-bottom: var(--sm-space-6);
+  }
+  .action-group h4 {
+    font-size: var(--sm-text-xs);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--sm-space-2);
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sm-space-2);
+    font: inherit;
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    padding: var(--sm-space-2) var(--sm-space-4);
+    border-radius: var(--sm-radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    min-height: var(--sm-touch-target);
+    transition: background var(--sm-transition-fast), box-shadow var(--sm-transition-fast);
+    white-space: nowrap;
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--sm-border-focus);
+    outline-offset: 2px;
+  }
+  .btn-primary {
+    background: var(--sm-brand-600);
+    color: var(--sm-text-inverse);
+  }
+  .btn-primary:hover { background: var(--sm-brand-700); }
+  .btn-success {
+    background: var(--sm-success-600);
+    color: var(--sm-text-inverse);
+  }
+  .btn-success:hover { background: var(--sm-success-700); }
+  .btn-danger {
+    background: var(--sm-danger-600);
+    color: var(--sm-text-inverse);
+  }
+  .btn-danger:hover { background: var(--sm-danger-700); }
+  .btn-outline {
+    background: var(--sm-surface-card);
+    border-color: var(--sm-border-default);
+    color: var(--sm-text-primary);
+  }
+  .btn-outline:hover { background: var(--sm-neutral-50); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--sm-text-secondary);
+  }
+  .btn-ghost:hover { background: var(--sm-neutral-100); }
+  .btn-sm {
+    font-size: var(--sm-text-xs);
+    padding: var(--sm-space-1) var(--sm-space-3);
+    min-height: 32px;
+  }
+  .btn-block { width: 100%; }
+  .btn-group {
+    display: flex;
+    gap: var(--sm-space-2);
+  }
+  .btn-group.vertical { flex-direction: column; }
+
+  /* Quick accept */
+  .quick-accept {
+    padding: var(--sm-space-3);
+    border-radius: var(--sm-radius-md);
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+  }
+  .quick-accept .qa-label {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-success-700);
+    margin-bottom: var(--sm-space-2);
+  }
+
+  /* Note field */
+  .note-field {
+    width: 100%;
+    font: inherit;
+    font-size: var(--sm-text-sm);
+    padding: var(--sm-space-2);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-md);
+    resize: vertical;
+    min-height: 60px;
+    background: var(--sm-surface-card);
+    color: var(--sm-text-primary);
+    margin-bottom: var(--sm-space-2);
+  }
+  .note-field:focus { outline: none; border-color: var(--sm-border-focus); }
+
+  /* Select field */
+  .field-select {
+    width: 100%;
+    font: inherit;
+    font-size: var(--sm-text-sm);
+    padding: var(--sm-space-2);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-surface-card);
+    color: var(--sm-text-primary);
+    margin-bottom: var(--sm-space-2);
+    min-height: var(--sm-touch-target);
+  }
+
+  /* Label */
+  .field-label {
+    font-size: var(--sm-text-xs);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-secondary);
+    margin-bottom: var(--sm-space-1);
+    display: block;
+  }
+
+  /* Status badge */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 2px 8px;
+    border-radius: var(--sm-radius-full);
+  }
+  .status-badge.open { background: #fef3c7; color: #92400e; }
+  .status-badge.monitoring { background: #dbeafe; color: #1e40af; }
+  .status-badge.resolved { background: #dcfce7; color: #166534; }
+
+  /* --- Mobile responsiveness --- */
+  @media (max-width: 1024px) {
+    .console {
+      grid-template-columns: 1fr;
+      grid-template-rows: var(--sm-header-height) auto 1fr;
+      grid-template-areas:
+        "header"
+        "queue"
+        "main";
+    }
+    .actions-panel {
+      position: fixed;
+      right: 0;
+      top: var(--sm-header-height);
+      bottom: 0;
+      width: var(--sm-actions-width);
+      z-index: 100;
+      box-shadow: var(--sm-shadow-lg);
+      transform: translateX(100%);
+      transition: transform var(--sm-transition-normal);
+    }
+    .actions-panel.open { transform: translateX(0); }
+    .actions-toggle {
+      display: flex !important;
+    }
+    .detail-grid { grid-template-columns: 1fr; }
+  }
+  @media (min-width: 1025px) {
+    .actions-toggle { display: none !important; }
+  }
+  .actions-toggle {
+    display: none;
+    position: fixed;
+    right: var(--sm-space-4);
+    bottom: var(--sm-space-4);
+    z-index: 101;
+    width: 48px; height: 48px;
+    border-radius: var(--sm-radius-full);
+    background: var(--sm-brand-600);
+    color: var(--sm-text-inverse);
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: var(--sm-shadow-md);
+    align-items: center;
+    justify-content: center;
+  }
+  .actions-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: var(--sm-surface-overlay);
+    z-index: 99;
+  }
+  .actions-overlay.open { display: block; }
+
+  @media (max-width: 640px) {
+    .queue-panel { max-height: 40vh; }
+    .console-header h1 { font-size: var(--sm-text-base); }
+    .header-badge { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="console">
+  <!-- ===== Header ===== -->
+  <header class="console-header">
+    <div class="sm-flex sm-items-center sm-gap-4">
+      <h1>Operator Console</h1>
+      <span class="header-badge">Space A-12</span>
+    </div>
+    <div class="header-actions">
+      <select class="ws-select" aria-label="Select walkthrough">
+        <option>Walkthrough — Apr 29, 2026 09:42</option>
+        <option>Walkthrough — Apr 28, 2026 14:15</option>
+        <option>Walkthrough — Apr 27, 2026 10:30</option>
+      </select>
+      <button class="btn btn-outline btn-sm">Batch Accept (4)</button>
+    </div>
+  </header>
+
+  <!-- ===== Queue Panel (Left) ===== -->
+  <nav class="queue-panel" aria-label="Candidate queue">
+    <div class="queue-tabs" role="tablist">
+      <button class="queue-tab" role="tab" aria-selected="true">Pending <span class="count">12</span></button>
+      <button class="queue-tab" role="tab">In Review <span class="count">3</span></button>
+      <button class="queue-tab" role="tab">Completed <span class="count">47</span></button>
+    </div>
+    <div class="queue-list">
+      <!-- High confidence candidates (quick-accept eligible) -->
+      <div class="candidate-card active">
+        <div class="cc-header">
+          <span class="cc-item">Fire Extinguisher #FE-042</span>
+          <span class="confidence high"><span class="confidence-dot"></span>96%</span>
+        </div>
+        <div class="cc-location">Zone 3-A &middot; Wall Mount East</div>
+        <div class="cc-meta">
+          <span>Repair: missing inspection tag</span>
+        </div>
+      </div>
+
+      <div class="candidate-card">
+        <div class="cc-header">
+          <span class="cc-item">First Aid Kit #FA-018</span>
+          <span class="confidence high"><span class="confidence-dot"></span>94%</span>
+        </div>
+        <div class="cc-location">Zone 2-B &middot; Hallway Cabinet</div>
+        <div class="cc-meta"><span>Last seen: Apr 14 — same location</span></div>
+      </div>
+
+      <div class="candidate-card">
+        <div class="cc-header">
+          <span class="cc-item">Ladder L-003</span>
+          <span class="confidence medium"><span class="confidence-dot"></span>78%</span>
+        </div>
+        <div class="cc-location">Zone 1-C &middot; Storage Rack B</div>
+        <div class="cc-meta"><span>Previously: Zone 1-A (moved?)</span></div>
+      </div>
+
+      <div class="candidate-card">
+        <div class="cc-header">
+          <span class="cc-item">Unknown Item</span>
+          <span class="confidence low"><span class="confidence-dot"></span>52%</span>
+        </div>
+        <div class="cc-location">Zone 4-A &middot; Floor Level</div>
+        <div class="cc-meta"><span>Suggested: Safety Sign S-007</span></div>
+      </div>
+
+      <div class="candidate-card">
+        <div class="cc-header">
+          <span class="cc-item">Pallet Jack PJ-002</span>
+          <span class="confidence high"><span class="confidence-dot"></span>97%</span>
+        </div>
+        <div class="cc-location">Zone 3-B &middot; Loading Dock</div>
+        <div class="cc-meta"><span>Damage: handle grip missing</span></div>
+      </div>
+
+      <div class="candidate-card">
+        <div class="cc-header">
+          <span class="cc-item">Exit Sign ES-011</span>
+          <span class="confidence medium"><span class="confidence-dot"></span>83%</span>
+        </div>
+        <div class="cc-location">Zone 2-A &middot; Overhead North</div>
+        <div class="cc-meta"><span>Repair: bulb dim, below 80% luminance</span></div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===== Main Panel (Center) ===== -->
+  <main class="main-panel">
+    <div class="candidate-detail">
+      <!-- Candidate header -->
+      <div class="cd-header">
+        <div class="cd-title">
+          <h2>Fire Extinguisher #FE-042</h2>
+          <p class="cd-meta">Detected at frame 00:42:18 &middot; Apr 29, 2026 09:42</p>
+        </div>
+        <span class="confidence high"><span class="confidence-dot"></span>96% match</span>
+      </div>
+
+      <!-- Evidence frame -->
+      <div class="evidence-frame">
+        <div class="placeholder">
+          [Walkthrough Frame — Zone 3-A, Wall Mount East]
+        </div>
+        <div class="evidence-overlay">
+          <span class="evidence-badge">Frame 00:42:18</span>
+          <span class="evidence-badge">Zone 3-A</span>
+        </div>
+      </div>
+
+      <!-- Detail grid -->
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="label">Proposed Identity</div>
+          <div class="value">Fire Extinguisher #FE-042</div>
+          <div class="value sub">Category: Safety Equipment</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Current Location</div>
+          <div class="value">Zone 3-A — Wall Mount East</div>
+          <div class="value sub">Storage Path: A / 3 / Wall-E</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Repair Category</div>
+          <div class="value">Missing inspection tag</div>
+          <div class="value sub">Severity: Medium &middot; Detected today</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Confidence</div>
+          <div class="value">96% — High</div>
+          <div class="value sub">Prior confirmations: 8 of last 8</div>
+        </div>
+      </div>
+
+      <!-- Location history timeline -->
+      <div class="timeline">
+        <h3>Location History</h3>
+        <div class="timeline-item">
+          <div class="timeline-dot current"></div>
+          <div class="timeline-body">
+            <strong>Zone 3-A — Wall Mount East</strong>
+            <div class="date">Apr 29, 2026 09:42 — Current walkthrough</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-body">
+            Zone 3-A — Wall Mount East
+            <div class="date">Apr 14, 2026 — Previous walkthrough</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-body">
+            Zone 3-A — Wall Mount West
+            <div class="date">Mar 28, 2026 — Relocated (operator confirmed)</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-body">
+            Zone 3-A — Wall Mount East
+            <div class="date">Mar 14, 2026 — Original placement</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===== Actions Panel (Right) ===== -->
+  <aside class="actions-panel" id="actions-panel">
+    <h3>Actions</h3>
+
+    <!-- Quick accept for high confidence -->
+    <div class="quick-accept action-group">
+      <div class="qa-label">High confidence — quick accept available</div>
+      <button class="btn btn-success btn-block">
+        Confirm Identity &amp; Location
+      </button>
+    </div>
+
+    <!-- Identity -->
+    <div class="action-group">
+      <h4>Item Identity</h4>
+      <label class="field-label" for="relabel">Relabel as</label>
+      <select class="field-select" id="relabel">
+        <option value="">Select item…</option>
+        <option>Fire Extinguisher #FE-042</option>
+        <option>Fire Extinguisher #FE-043</option>
+        <option>CO₂ Extinguisher #CE-005</option>
+        <option>New item…</option>
+      </select>
+      <div class="btn-group">
+        <button class="btn btn-outline btn-sm sm-flex-1">Confirm</button>
+        <button class="btn btn-outline btn-sm sm-flex-1">Mark Unseen</button>
+      </div>
+    </div>
+
+    <!-- Location -->
+    <div class="action-group">
+      <h4>Location</h4>
+      <label class="field-label" for="correct-loc">Correct location</label>
+      <select class="field-select" id="correct-loc">
+        <option>Zone 3-A — Wall Mount East</option>
+        <option>Zone 3-A — Wall Mount West</option>
+        <option>Zone 3-B — Floor Level</option>
+        <option>Other…</option>
+      </select>
+      <button class="btn btn-outline btn-sm btn-block">Update Location</button>
+    </div>
+
+    <!-- Repair decision -->
+    <div class="action-group">
+      <h4>Repair: Missing inspection tag</h4>
+      <div class="btn-group vertical">
+        <button class="btn btn-outline btn-sm">Accept — Open Repair</button>
+        <button class="btn btn-outline btn-sm">Downgrade — Monitor Only</button>
+        <button class="btn btn-outline btn-sm">Reject — False Positive</button>
+      </div>
+    </div>
+
+    <!-- Merge -->
+    <div class="action-group">
+      <h4>Merge Duplicate</h4>
+      <select class="field-select" aria-label="Merge with item">
+        <option value="">Merge with…</option>
+        <option>FE-042</option>
+        <option>FE-043</option>
+      </select>
+      <button class="btn btn-outline btn-sm btn-block">Merge Items</button>
+    </div>
+
+    <!-- Resolution note -->
+    <div class="action-group">
+      <h4>Resolution Note</h4>
+      <textarea class="note-field" placeholder="Evidence note for audit trail…"></textarea>
+      <button class="btn btn-outline btn-sm">Mark Resolved with Note</button>
+    </div>
+
+    <!-- Navigation -->
+    <div class="action-group">
+      <div class="btn-group">
+        <button class="btn btn-outline btn-sm sm-flex-1">&larr; Previous</button>
+        <button class="btn btn-primary btn-sm sm-flex-1">Skip &amp; Next &rarr;</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile actions toggle -->
+  <button class="actions-toggle" id="actions-toggle" aria-label="Toggle actions panel">&#9776;</button>
+  <div class="actions-overlay" id="actions-overlay"></div>
+</div>
+
+<script>
+  const panel = document.getElementById('actions-panel');
+  const overlay = document.getElementById('actions-overlay');
+  const toggle = document.getElementById('actions-toggle');
+
+  function openActions() {
+    panel.classList.add('open');
+    overlay.classList.add('open');
+  }
+  function closeActions() {
+    panel.classList.remove('open');
+    overlay.classList.remove('open');
+  }
+
+  toggle.addEventListener('click', () => {
+    panel.classList.contains('open') ? closeActions() : openActions();
+  });
+  overlay.addEventListener('click', closeActions);
+
+  // Queue card selection
+  document.querySelectorAll('.candidate-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.candidate-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      closeActions();
+    });
+  });
+</script>
+
+</body>
+</html>

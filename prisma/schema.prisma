@@ -1,19 +1,357 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-model TraceRecord {
+// ── Users & Auth ───────────────────────────────────────────────────────────────
+
+model User {
   id        String   @id @default(cuid())
-  tenantId  String
-  title     String
-  body      String?
+  clerkId   String   @unique
+  email     String?
+  name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([tenantId, createdAt])
+  tenants UserTenant[]
+}
+
+model UserTenant {
+  id       String @id @default(cuid())
+  userId   String
+  tenantId String
+  role     String @default("member")
+
+  user   User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+}
+
+// ── Spaces ────────────────────────────────────────────────────────────────────
+
+model Space {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  walkthroughs     Walkthrough[]
+  zones            SpaceZone[]
+  storageLocations StorageLocation[]
+  inventoryItems   InventoryItem[]
+  repairIssues     RepairIssue[]
+
+  @@index([tenantId])
+}
+
+// ── Walkthroughs ──────────────────────────────────────────────────────────────
+
+model Walkthrough {
+  id          String    @id @default(cuid())
+  spaceId     String
+  tenantId    String
+  status      String    @default("uploaded")
+  metadata    String?
+  uploadedAt  DateTime  @default(now())
+  processedAt DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  space              Space              @relation(fields: [spaceId], references: [id])
+  mediaAssets        MediaAsset[]
+  itemObservations   ItemObservation[]
+  repairObservations RepairObservation[]
+  reviewTasks        ReviewTask[]
+  processingJobs     ProcessingJob[]
+
+  @@index([spaceId, status])
+  @@index([tenantId])
+}
+
+// ── Media Assets ──────────────────────────────────────────────────────────────
+
+model MediaAsset {
+  id            String   @id @default(cuid())
+  walkthroughId String
+  tenantId      String
+  type          String
+  url           String
+  thumbnailUrl  String?
+  createdAt     DateTime @default(now())
+
+  walkthrough Walkthrough @relation(fields: [walkthroughId], references: [id])
+
+  @@index([walkthroughId])
+}
+
+// ── Space Zones ───────────────────────────────────────────────────────────────
+
+model SpaceZone {
+  id          String   @id @default(cuid())
+  spaceId     String
+  tenantId    String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  space               Space               @relation(fields: [spaceId], references: [id])
+  storageLocations    StorageLocation[]
+  itemObservations    ItemObservation[]
+  repairObservations  RepairObservation[]
+  itemLocationHistory ItemLocationHistory[]
+
+  @@index([spaceId])
+}
+
+// ── Storage Locations ─────────────────────────────────────────────────────────
+
+model StorageLocation {
+  id          String   @id @default(cuid())
+  spaceId     String
+  zoneId      String?
+  parentId    String?
+  tenantId    String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  space               Space               @relation(fields: [spaceId], references: [id])
+  zone                SpaceZone?          @relation(fields: [zoneId], references: [id])
+  parent              StorageLocation?    @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children            StorageLocation[]   @relation("LocationHierarchy")
+  itemObservations    ItemObservation[]
+  itemLocationHistory ItemLocationHistory[]
+
+  @@index([spaceId])
+  @@index([zoneId])
+  @@index([parentId])
+}
+
+// ── Inventory Items ───────────────────────────────────────────────────────────
+
+model InventoryItem {
+  id           String   @id @default(cuid())
+  spaceId      String
+  tenantId     String
+  name         String
+  category     String?
+  description  String?
+  quantity     Int      @default(1)
+  searchVector Unsupported("tsvector")?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  space            Space               @relation(fields: [spaceId], references: [id])
+  observations     ItemObservation[]
+  identityLinks    ItemIdentityLink[]
+  locationHistory  ItemLocationHistory[]
+  repairIssues     RepairIssue[]
+  reviewActions    ReviewAction[]
+  aliases          ItemAlias[]
+
+  @@index([spaceId, name])
+  @@index([tenantId])
+}
+
+// ── Item Aliases ──────────────────────────────────────────────────────────────
+
+model ItemAlias {
+  id        String   @id @default(cuid())
+  itemId    String
+  tenantId  String
+  alias     String
+  source    String   @default("operator")
+  createdAt DateTime @default(now())
+
+  item InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@unique([itemId, alias])
+  @@index([itemId])
+  @@index([tenantId])
+}
+
+// ── Item Observations ─────────────────────────────────────────────────────────
+
+model ItemObservation {
+  id                String   @id @default(cuid())
+  walkthroughId     String
+  tenantId          String
+  itemId            String?
+  zoneId            String?
+  storageLocationId String?
+  label             String
+  confidence        Float?
+  bbox              String?
+  keyframeUrl       String?
+  status            String    @default("pending")
+  createdAt         DateTime  @default(now())
+
+  walkthrough     Walkthrough      @relation(fields: [walkthroughId], references: [id])
+  item            InventoryItem?   @relation(fields: [itemId], references: [id])
+  zone            SpaceZone?       @relation(fields: [zoneId], references: [id])
+  storageLocation StorageLocation? @relation(fields: [storageLocationId], references: [id])
+  identityLinks   ItemIdentityLink[]
+  locationHistory ItemLocationHistory[]
+  reviewActions   ReviewAction[]
+
+  @@index([walkthroughId])
+  @@index([itemId])
+}
+
+// ── Item Identity Links ───────────────────────────────────────────────────────
+
+model ItemIdentityLink {
+  id              String   @id @default(cuid())
+  observationId   String
+  itemId          String
+  tenantId        String
+  matchConfidence Float?
+  createdAt       DateTime @default(now())
+
+  observation ItemObservation @relation(fields: [observationId], references: [id])
+  item        InventoryItem   @relation(fields: [itemId], references: [id])
+
+  @@unique([observationId, itemId])
+  @@index([observationId])
+  @@index([itemId])
+}
+
+// ── Item Location History ─────────────────────────────────────────────────────
+
+model ItemLocationHistory {
+  id                  String    @id @default(cuid())
+  itemId              String
+  tenantId            String
+  zoneId              String?
+  storageLocationId   String?
+  observedAt          DateTime  @default(now())
+  sourceObservationId String?
+  createdAt           DateTime  @default(now())
+
+  item              InventoryItem    @relation(fields: [itemId], references: [id])
+  zone              SpaceZone?       @relation(fields: [zoneId], references: [id])
+  storageLocation   StorageLocation? @relation(fields: [storageLocationId], references: [id])
+  sourceObservation ItemObservation? @relation(fields: [sourceObservationId], references: [id])
+
+  @@index([itemId, observedAt])
+}
+
+// ── Repair Issues ─────────────────────────────────────────────────────────────
+
+model RepairIssue {
+  id          String    @id @default(cuid())
+  spaceId     String
+  tenantId    String
+  title       String
+  description String?
+  severity    String?
+  status      String    @default("open")
+  itemId      String?
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  space              Space               @relation(fields: [spaceId], references: [id])
+  item               InventoryItem?      @relation(fields: [itemId], references: [id])
+  repairObservations RepairObservation[]
+
+  @@index([spaceId, status])
+  @@index([tenantId])
+}
+
+// ── Repair Observations ───────────────────────────────────────────────────────
+
+model RepairObservation {
+  id            String   @id @default(cuid())
+  walkthroughId String
+  tenantId      String
+  repairIssueId String?
+  zoneId        String?
+  label         String
+  confidence    Float?
+  bbox          String?
+  keyframeUrl   String?
+  status        String    @default("pending")
+  createdAt     DateTime  @default(now())
+
+  walkthrough Walkthrough  @relation(fields: [walkthroughId], references: [id])
+  repairIssue RepairIssue? @relation(fields: [repairIssueId], references: [id])
+  zone        SpaceZone?   @relation(fields: [zoneId], references: [id])
+
+  @@index([walkthroughId])
+  @@index([repairIssueId])
+}
+
+// ── Review Tasks ──────────────────────────────────────────────────────────────
+
+model ReviewTask {
+  id            String   @id @default(cuid())
+  walkthroughId String
+  tenantId      String
+  status        String   @default("pending")
+  assignedTo    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  walkthrough Walkthrough    @relation(fields: [walkthroughId], references: [id])
+  actions     ReviewAction[]
+
+  @@unique([walkthroughId])
+  @@index([tenantId, status])
+}
+
+// ── Processing Jobs ───────────────────────────────────────────────────────────
+
+model ProcessingJob {
+  id            String    @id @default(cuid())
+  walkthroughId String
+  tenantId      String
+  stage         String
+  status        String    @default("pending")
+  attempt       Int       @default(1)
+  maxAttempts   Int       @default(3)
+  nextRetryAt   DateTime?
+  error         String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  walkthrough Walkthrough @relation(fields: [walkthroughId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([walkthroughId])
+  @@index([tenantId, status])
+}
+
+// ── Review Actions ────────────────────────────────────────────────────────────
+
+model ReviewAction {
+  id            String   @id @default(cuid())
+  reviewTaskId  String
+  tenantId      String
+  actionType    String
+  observationId String?
+  itemId        String?
+  previousLabel String?
+  newLabel      String?
+  note          String?
+  createdAt     DateTime @default(now())
+
+  reviewTask  ReviewTask       @relation(fields: [reviewTaskId], references: [id])
+  observation ItemObservation? @relation(fields: [observationId], references: [id])
+  item        InventoryItem?   @relation(fields: [itemId], references: [id])
+
+  @@index([reviewTaskId])
 }
