@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install client dependencies
+        run: npm run client:install
+
       - name: Apply migrations
         run: npx prisma migrate deploy
 
