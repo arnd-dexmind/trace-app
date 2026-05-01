@@ -45,6 +45,7 @@ async function cleanDatabase() {
   await db.itemLocationHistory.deleteMany();
   await db.repairObservation.deleteMany();
   await db.itemObservation.deleteMany();
+  await db.itemAlias.deleteMany();
   await db.reviewTask.deleteMany();
   await db.processingJob.deleteMany();
   await db.mediaAsset.deleteMany();
