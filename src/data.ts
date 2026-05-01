@@ -1537,3 +1537,89 @@ export async function processReviewAction(
 
   return { action };
 }
+
+export async function processBulkActions(
+  db: PrismaClient,
+  params: { tenantId: string; itemIds: string[]; action: "accept" | "reject" },
+) {
+  const results: { observationId: string; status: "ok" | "error"; error?: string }[] = [];
+
+  for (const observationId of params.itemIds) {
+    try {
+      // Find the review task that contains this observation
+      const obs = await db.itemObservation.findUnique({
+        where: { id: observationId },
+        select: { walkthroughId: true, label: true },
+      });
+      if (!obs) {
+        results.push({ observationId, status: "error", error: "Observation not found" });
+        continue;
+      }
+
+      const task = await db.reviewTask.findFirst({
+        where: { walkthroughId: obs.walkthroughId, tenantId: params.tenantId },
+        include: { walkthrough: true },
+      });
+      if (!task) {
+        results.push({ observationId, status: "error", error: "Review task not found" });
+        continue;
+      }
+
+      // Record the action
+      await db.reviewAction.create({
+        data: {
+          reviewTaskId: task.id,
+          tenantId: params.tenantId,
+          actionType: params.action,
+          observationId,
+          itemId: null,
+          previousLabel: null,
+          newLabel: null,
+          note: `Bulk ${params.action}`,
+        },
+      });
+
+      if (params.action === "accept") {
+        const spaceId = task.walkthrough.spaceId;
+        const newItem = await db.inventoryItem.create({
+          data: {
+            spaceId,
+            tenantId: params.tenantId,
+            name: obs.label,
+          },
+        });
+
+        await db.itemIdentityLink.upsert({
+          where: { observationId_itemId: { observationId, itemId: newItem.id } },
+          create: { observationId, itemId: newItem.id, tenantId: params.tenantId, matchConfidence: null },
+          update: {},
+        });
+
+        await db.itemLocationHistory.create({
+          data: {
+            itemId: newItem.id,
+            tenantId: params.tenantId,
+            sourceObservationId: observationId,
+            observedAt: new Date(),
+          },
+        });
+
+        await db.itemObservation.update({
+          where: { id: observationId },
+          data: { status: "accepted", itemId: newItem.id },
+        });
+      } else {
+        await db.itemObservation.update({
+          where: { id: observationId },
+          data: { status: "rejected" },
+        });
+      }
+
+      results.push({ observationId, status: "ok" });
+    } catch (e) {
+      results.push({ observationId, status: "error", error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  }
+
+  return results;
+}

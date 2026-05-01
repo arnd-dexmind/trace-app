@@ -265,6 +265,19 @@ export function getReviewTask(taskId: string) {
   return request<ReviewTask>(`/api/review/queue/${taskId}`);
 }
 
+export interface BulkActionResult {
+  observationId: string;
+  status: "ok" | "error";
+  error?: string;
+}
+
+export function bulkProcessActions(body: { itemIds: string[]; action: "accept" | "reject" }) {
+  return request<{ results: BulkActionResult[] }>("/api/review/bulk", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function processAction(
   taskId: string,
   body: {

@@ -9,6 +9,7 @@ import {
   listReviewQueue,
   getReviewTask,
   processReviewAction,
+  processBulkActions,
 } from "../data.js";
 
 export const reviewRouter = Router();
@@ -106,4 +107,26 @@ reviewRouter.post("/:taskId/actions", requireUuidParams("taskId"), async (req, r
   }
 
   res.status(201).json(result.action);
+});
+
+// ── Bulk Actions ───────────────────────────────────────────────────────────────
+
+reviewRouter.post("/bulk", async (req, res) => {
+  const { itemIds, action } = req.body || {};
+  if (!Array.isArray(itemIds) || itemIds.length === 0) {
+    sendApiError(res, 400, "BAD_REQUEST", "itemIds must be a non-empty array");
+    return;
+  }
+  if (action !== "accept" && action !== "reject") {
+    sendApiError(res, 400, "BAD_REQUEST", "action must be accept or reject");
+    return;
+  }
+
+  const results = await processBulkActions(db, {
+    tenantId: res.locals.tenantId,
+    itemIds,
+    action,
+  });
+
+  res.status(200).json({ results });
 });
