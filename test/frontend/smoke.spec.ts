@@ -2,6 +2,9 @@ import { test, expect } from "@playwright/test";
 
 // Set up localStorage before each test so the app has a tenant and space context
 test.beforeEach(async ({ page }) => {
+  // Wait for backends to be ready
+  await page.request.get("http://localhost:3001/api/health");
+
   await page.goto("/");
 
   // The app reads tenant/space from localStorage. Inject them.
@@ -9,7 +12,6 @@ test.beforeEach(async ({ page }) => {
     localStorage.setItem("trace-tenant-id", "qa-tenant");
   });
 
-  // Create a space via the API so the UI has data to work with
   const spaceRes = await page.request.post("http://localhost:3001/api/spaces", {
     headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
     data: { name: "QA Test Space", description: "Smoke test space" },
@@ -153,21 +155,6 @@ test("upload page shows new space form on click", async ({ page }) => {
 });
 
 test("dashboard renders at / with summary cards and quick actions", async ({ page }) => {
-  // Seed data via API so the dashboard shows summary cards
-  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
-  const baseUrl = "http://localhost:3001";
-  const headers = { "content-type": "application/json", "x-tenant-id": "qa-tenant" };
-
-  // Create an inventory item
-  await page.request.post(`${baseUrl}/api/spaces/${spaceId}/observations`, {
-    headers,
-    data: { observations: [{ label: "Test Item", type: "item", zoneId: null, storageLocationId: null, confidence: 0.9 }] },
-  });
-
-  // Accept it into inventory by searching and aliasing (simplest path for smoke test)
-  // Actually, just reload — the dashboard only needs the API to return counts > 0
-  // Let's just check the Dashboard heading and quick actions render even with empty data
-
   await page.goto("/");
   await page.waitForLoadState("networkidle");
 

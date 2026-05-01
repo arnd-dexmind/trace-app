@@ -10,7 +10,6 @@ import {
   getJobs,
   PROCESSING_STAGES,
 } from "../src/lib/job-queue.js";
-import { processBatch } from "../src/lib/processing-orchestrator.js";
 
 function url(port: number, path: string) {
   return `http://127.0.0.1:${port}${path}`;
@@ -340,7 +339,7 @@ test("GET /api/processing/metrics returns stage-level metrics", async () => {
       headers: headers("tenant-a"),
       body: JSON.stringify({ metadata: {} }),
     });
-    const wt = (await wtRes.json()) as { id: string };
+    await wtRes.json();
 
     // Run processing
     await fetch(url(address.port, "/api/processing/tick"), {
@@ -581,8 +580,6 @@ test("walkthrough transitions to failed when job reaches dead-letter", async () 
     // We need to directly manipulate the DB to force a failure, since
     // processBatch catches errors and our no-op stages don't fail.
     // We'll dequeue a job and fail it through the job queue directly.
-    const jobs = await getJobs(db, wt.id, "tenant-a");
-    const firstJob = jobs[0];
 
     // Fail the job 3 times to exhaust retries
     let job = await dequeue(db, "tenant-a");

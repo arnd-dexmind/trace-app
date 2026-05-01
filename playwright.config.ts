@@ -13,13 +13,13 @@ export default defineConfig({
       command: "PORT=3001 npm run dev",
       port: 3001,
       reuseExistingServer: true,
-      timeout: 15000,
+      timeout: 30000,
     },
     {
       command: "npm run client:dev",
       port: 5173,
       reuseExistingServer: true,
-      timeout: 15000,
+      timeout: 30000,
     },
   ],
 });
