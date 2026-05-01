@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { db } from "../src/lib/db.js";
 import { createApp } from "../src/app.js";
+import { cleanDatabase } from "./_helpers.js";
 
 function url(port: number, path: string) {
   return `http://127.0.0.1:${port}${path}`;
@@ -37,25 +38,6 @@ async function processWalkthrough(port: number, spaceId: string, walkthroughId: 
     headers: headers(tenant),
   });
   return (await res.json()) as { id: string; status: string; processedAt: string | null };
-}
-
-async function cleanDatabase() {
-  await db.reviewAction.deleteMany();
-  await db.itemIdentityLink.deleteMany();
-  await db.itemLocationHistory.deleteMany();
-  await db.repairObservation.deleteMany();
-  await db.itemObservation.deleteMany();
-  await db.itemAlias.deleteMany();
-  await db.reviewTask.deleteMany();
-  await db.processingJob.deleteMany();
-  await db.mediaAsset.deleteMany();
-  await db.walkthrough.deleteMany();
-  await db.repairIssue.deleteMany();
-  await db.storageLocation.updateMany({ data: { parentId: null } });
-  await db.storageLocation.deleteMany();
-  await db.spaceZone.deleteMany();
-  await db.inventoryItem.deleteMany();
-  await db.space.deleteMany();
 }
 
 // ── Space CRUD ────────────────────────────────────────────────────────────────

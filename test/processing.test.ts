@@ -10,6 +10,7 @@ import {
   getJobs,
   PROCESSING_STAGES,
 } from "../src/lib/job-queue.js";
+import { cleanDatabase } from "./_helpers.js";
 
 function url(port: number, path: string) {
   return `http://127.0.0.1:${port}${path}`;
@@ -17,27 +18,6 @@ function url(port: number, path: string) {
 
 function headers(tenantId: string, extra?: Record<string, string>) {
   return { "content-type": "application/json", "x-tenant-id": tenantId, ...extra };
-}
-
-async function cleanDatabase() {
-  // Delete in FK-safe order: children before parents
-  await db.reviewAction.deleteMany();
-  await db.itemIdentityLink.deleteMany();
-  await db.itemLocationHistory.deleteMany();
-  await db.repairObservation.deleteMany();
-  await db.itemObservation.deleteMany();
-  await db.itemAlias.deleteMany();
-  await db.reviewTask.deleteMany();
-  await db.processingJob.deleteMany();
-  await db.mediaAsset.deleteMany();
-  // Nullify self-referential parentIds before deleting storage locations
-  await db.storageLocation.updateMany({ data: { parentId: null } });
-  await db.storageLocation.deleteMany();
-  await db.walkthrough.deleteMany();
-  await db.repairIssue.deleteMany();
-  await db.spaceZone.deleteMany();
-  await db.inventoryItem.deleteMany();
-  await db.space.deleteMany();
 }
 
 async function createTestSpace(port: number, tenant = "tenant-a") {
