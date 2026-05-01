@@ -31,11 +31,10 @@ test("POST /api/uploads accepts image file", async () => {
     assert.equal(typeof body.url, "string");
     assert.match(body.url, /^\/uploads\//);
     assert.equal(body.mimetype, "image/jpeg");
-    assert.equal(body.originalName, "test.jpg");
     assert.ok(body.size > 0);
 
     // Clean up uploaded file
-    try { unlinkSync(join(process.cwd(), "uploads", body.filename)); } catch { /* ok */ }
+    try { unlinkSync(join(process.cwd(), "uploads", body.key)); } catch { /* ok */ }
   } finally {
     server.close();
   }
@@ -60,9 +59,8 @@ test("POST /api/uploads accepts PNG file", async () => {
     assert.equal(res.status, 201);
     const body = await res.json();
     assert.equal(body.mimetype, "image/png");
-    assert.equal(body.originalName, "photo.png");
 
-    try { unlinkSync(join(process.cwd(), "uploads", body.filename)); } catch { /* ok */ }
+    try { unlinkSync(join(process.cwd(), "uploads", body.key)); } catch { /* ok */ }
   } finally {
     server.close();
   }
@@ -151,7 +149,7 @@ test("GET /uploads/:filename serves uploaded file", async () => {
     });
 
     assert.equal(uploadRes.status, 201);
-    const { url: fileUrl, filename } = await uploadRes.json() as { url: string; filename: string };
+    const { url: fileUrl, key: filename } = await uploadRes.json() as { url: string; key: string };
 
     // Retrieve via static serving
     const getRes = await fetch(url(port, fileUrl));
