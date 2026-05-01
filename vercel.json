@@ -1,5 +1,6 @@
 {
   "buildCommand": "npm install && npm run client:install && npx prisma generate && DATABASE_URL=\"$DATABASE_URL_UNPOOLED\" npx prisma migrate deploy && npm run build",
+  "outputDirectory": "client/dist",
   "functions": {
     "api/index.ts": {
       "includeFiles": "client/dist/**"
