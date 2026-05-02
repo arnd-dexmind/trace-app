@@ -14,18 +14,28 @@ const ALLOWED_MIMETYPES = new Set([
   "video/quicktime",
 ]);
 
+export class InvalidFileTypeError extends Error {
+  mimetype: string;
+
+  constructor(mimetype: string) {
+    super(`File type ${mimetype} is not allowed`);
+    this.name = "InvalidFileTypeError";
+    this.mimetype = mimetype;
+  }
+}
+
 const fileFilter: multer.Options["fileFilter"] = (_req, file, cb) => {
   if (ALLOWED_MIMETYPES.has(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error(`File type ${file.mimetype} is not allowed`));
+    cb(new InvalidFileTypeError(file.mimetype));
   }
 };
 
 export const upload = multer({
   storage: multer.memoryStorage(),
   fileFilter,
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 },
 });
 
 export async function handleUpload(file: Express.Multer.File, prefix: string) {

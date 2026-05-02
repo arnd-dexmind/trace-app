@@ -102,7 +102,9 @@ test("POST /api/uploads rejects disallowed file type", async () => {
       body: form,
     });
 
-    assert.equal(res.status, 500);
+    assert.equal(res.status, 415);
+    const body = await res.json();
+    assert.equal(body.error.code, "UNSUPPORTED_MEDIA_TYPE");
   } finally {
     server.close();
   }

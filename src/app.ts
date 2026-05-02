@@ -1,3 +1,4 @@
+import "./lib/async-express.js";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,7 +7,7 @@ import { clerkMiddleware } from "@clerk/express";
 import { ApiError, createRequestId, sendApiError } from "./lib/errors.js";
 import { createAuthMiddleware } from "./lib/auth.js";
 import { db } from "./lib/db.js";
-import { upload, handleUpload, generateStorageKey, storageProvider } from "./lib/upload.js";
+import { upload, handleUpload, generateStorageKey, storageProvider, InvalidFileTypeError } from "./lib/upload.js";
 import { UPLOADS_DIR } from "./lib/storage.js";
 import { getMediaAsset } from "./data.js";
 import multer from "multer";
@@ -14,6 +15,10 @@ import { spacesRouter } from "./routes/spaces.js";
 import { reviewRouter } from "./routes/review.js";
 import { processingRouter } from "./routes/processing.js";
 import { onboardingRouter } from "./routes/onboarding.js";
+import { analyticsRouter } from "./routes/analytics.js";
+import { sharingRouter } from "./routes/sharing.js";
+import { teamRouter } from "./routes/team.js";
+import { notificationsRouter } from "./routes/notifications.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = join(__dirname, "..", "client", "dist");
@@ -161,13 +166,17 @@ export function createApp() {
   app.use("/api/review", reviewRouter);
   app.use("/api/processing", processingRouter);
   app.use("/api/onboarding", onboardingRouter);
+  app.use("/api/analytics", analyticsRouter);
+  app.use("/api/share", sharingRouter);
+  app.use("/api/team", teamRouter);
+  app.use("/api/notifications", notificationsRouter);
 
   // Serve React SPA in production
   if (existsSync(CLIENT_DIST)) {
     app.use(express.static(CLIENT_DIST));
 
     // SPA fallback for client-side routes
-    const spaRoutes = ["/review", "/items", "/repairs", "/upload", "/capture", "/dashboard", "/welcome"];
+    const spaRoutes = ["/review", "/items", "/repairs", "/upload", "/capture", "/dashboard", "/welcome", "/analytics", "/team", "/share", "/spaces"];
     for (const route of spaRoutes) {
       app.get(route, (_req, res) => {
         res.type("html").send(renderPage());
@@ -186,6 +195,11 @@ export function createApp() {
     void next;
     if (err instanceof ApiError) {
       sendApiError(res, err.status, err.code, err.message);
+      return;
+    }
+
+    if (err instanceof InvalidFileTypeError) {
+      sendApiError(res, 415, "UNSUPPORTED_MEDIA_TYPE", err.message);
       return;
     }
 
