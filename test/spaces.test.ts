@@ -256,12 +256,12 @@ test("process endpoint rejects non-uploaded walkthrough", async () => {
     // Process once
     await processWalkthrough(address.port, space.id, wt.id);
 
-    // Process again — should fail since status is now "processing"
+    // Process again — should fail since status is no longer "uploaded"
     const res = await fetch(
       url(address.port, `/api/spaces/${space.id}/walkthroughs/${wt.id}/process`),
       { method: "POST", headers: headers("tenant-a") },
     );
-    assert.equal(res.status, 404);
+    assert.equal(res.status, 400);
   } finally {
     server.close();
   }

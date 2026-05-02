@@ -3,6 +3,8 @@ import type { Request, Response, NextFunction } from "express";
 import { db } from "../lib/db.js";
 import { sendApiError } from "../lib/errors.js";
 import { createAuthMiddleware } from "../lib/auth.js";
+import { sendEmail, welcomeTemplate, getUserEmail } from "../email/send.js";
+import { upload, handleUpload } from "../lib/upload.js";
 import { isUuid } from "../lib/validation.js";
 import type { PaginatedResult, SearchItemsParams } from "../data.js";
 import {
@@ -83,6 +85,19 @@ spacesRouter.post("/", async (req, res) => {
     description,
   });
   res.status(201).json(space);
+
+  // Send welcome email (best-effort, non-blocking)
+  if (res.locals.clerkId) {
+    getUserEmail(res.locals.clerkId).then((email) => {
+      if (email) {
+        sendEmail({
+          to: email,
+          subject: "Welcome to PerifEye!",
+          html: welcomeTemplate({ name }),
+        });
+      }
+    });
+  }
 });
 
 spacesRouter.get("/", async (req, res) => {
@@ -221,15 +236,75 @@ spacesRouter.get("/:id/walkthroughs/:walkthroughId/diff", async (req, res) => {
   res.status(200).json(diff);
 });
 
+spacesRouter.post("/:id/walkthroughs/:walkthroughId/upload", requireUuidParams("id", "walkthroughId"), upload.single("file"), async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const wt = await getWalkthrough(db, req.params.walkthroughId, res.locals.tenantId);
+  if (!wt || wt.spaceId !== req.params.id) {
+    sendApiError(res, 404, "NOT_FOUND", "Walkthrough not found in this space");
+    return;
+  }
+
+  if (!req.file) {
+    sendApiError(res, 400, "BAD_REQUEST", "No file provided");
+    return;
+  }
+
+  try {
+    const stored = await handleUpload(req.file, "uploads");
+
+    await db.walkthrough.update({
+      where: { id: req.params.walkthroughId },
+      data: { status: "uploaded" },
+    });
+
+    res.status(201).json({
+      url: stored.url,
+      key: stored.key,
+      size: stored.size,
+      mimetype: stored.mimetype,
+      originalName: req.file.originalname,
+      storedName: stored.key,
+    });
+  } catch (err) {
+    console.error(JSON.stringify({
+      level: "error",
+      requestId: res.locals.requestId,
+      message: "Walkthrough upload failed",
+      detail: err instanceof Error ? err.message : String(err),
+    }));
+    sendApiError(res, 500, "INTERNAL_ERROR", "Upload failed");
+  }
+});
+
 spacesRouter.post("/:id/walkthroughs/:walkthroughId/process", requireUuidParams("id", "walkthroughId"), async (req, res) => {
   void req.body;
+
+  const wt = await getWalkthrough(db, req.params.walkthroughId, res.locals.tenantId);
+  if (!wt) {
+    sendApiError(res, 404, "NOT_FOUND", "Walkthrough not found");
+    return;
+  }
+  if (wt.status === "processing") {
+    sendApiError(res, 400, "BAD_REQUEST", "Walkthrough is already processing");
+    return;
+  }
+  if (wt.status !== "uploaded") {
+    sendApiError(res, 400, "BAD_REQUEST", "Walkthrough cannot be processed in its current state");
+    return;
+  }
+
   const result = await startProcessing(
     db,
     req.params.walkthroughId,
     res.locals.tenantId,
   );
   if (!result) {
-    sendApiError(res, 404, "NOT_FOUND", "Walkthrough not found or not in uploaded state");
+    sendApiError(res, 500, "INTERNAL_ERROR", "Failed to start processing");
     return;
   }
 
@@ -597,8 +672,8 @@ spacesRouter.get("/:id/repairs/:issueId", async (req, res) => {
 
 spacesRouter.patch("/:id/repairs/:issueId", requireUuidParams("id", "issueId"), async (req, res) => {
   const status = typeof req.body?.status === "string" ? req.body.status : "";
-  if (!["open", "in_progress", "resolved"].includes(status)) {
-    sendApiError(res, 400, "BAD_REQUEST", "status must be open, in_progress, or resolved");
+  if (!["open", "acknowledged", "in_progress", "resolved", "verified"].includes(status)) {
+    sendApiError(res, 400, "BAD_REQUEST", "status must be open, acknowledged, in_progress, resolved, or verified");
     return;
   }
 

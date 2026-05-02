@@ -588,9 +588,9 @@ test("walkthrough transitions to failed when job reaches dead-letter", async () 
   }
 });
 
-// ── Idempotency: process endpoint on already-processing walkthrough ────────
+// ── Idempotency: process endpoint on already-processed walkthrough ────────
 
-test("POST /process returns 404 for walkthrough not in uploaded state", async () => {
+test("POST /process returns 400 for walkthrough not in uploaded state", async () => {
   await cleanDatabase();
   const app = createApp();
   const server = app.listen(0);
@@ -618,7 +618,43 @@ test("POST /process returns 404 for walkthrough not in uploaded state", async ()
       url(address.port, `/api/spaces/${space.id}/walkthroughs/${wt.id}/process`),
       { method: "POST", headers: headers("tenant-a") },
     );
-    assert.equal(res.status, 404);
+    assert.equal(res.status, 400);
+  } finally {
+    server.close();
+  }
+});
+
+test("POST /process returns 400 for walkthrough currently processing", async () => {
+  await cleanDatabase();
+  const app = createApp();
+  const server = app.listen(0);
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("unexpected address");
+
+    const space = await createTestSpace(address.port);
+    const wtRes = await fetch(url(address.port, `/api/spaces/${space.id}/walkthroughs`), {
+      method: "POST",
+      headers: headers("tenant-a"),
+      body: JSON.stringify({ metadata: {} }),
+    });
+    const wt = (await wtRes.json()) as { id: string };
+
+    // Set the walkthrough status to "processing" directly in the DB to simulate
+    // a walkthrough that is already being processed.
+    await db.walkthrough.update({
+      where: { id: wt.id },
+      data: { status: "processing" },
+    });
+
+    const res = await fetch(
+      url(address.port, `/api/spaces/${space.id}/walkthroughs/${wt.id}/process`),
+      { method: "POST", headers: headers("tenant-a") },
+    );
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.error.message, "Walkthrough is already processing");
   } finally {
     server.close();
   }
