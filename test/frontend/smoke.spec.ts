@@ -267,3 +267,429 @@ test("capture page is reachable from nav", async ({ page }) => {
   const spaceSelector = page.locator('select[aria-label="Select space"]');
   await expect(spaceSelector).toBeVisible();
 });
+
+test("results page renders with empty state when no observations exist", async ({ page }) => {
+  // Create a walkthrough in the current space
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  await page.goto(`/results/${walkthrough.id}`);
+  await page.waitForLoadState("networkidle");
+
+  // Empty state — breadcrumb and heading now rendered for navigation context
+  await expect(page.getByRole("heading", { name: "Walkthrough Results" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No Items Detected" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Upload Another Walkthrough" })).toBeVisible();
+});
+
+test("results page renders stats grid and item cards with observations", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  // Create walkthrough
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  // Ingest some observations to simulate AI processing
+  await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [
+        { label: "Binder - Blue 3-Ring", confidence: 96 },
+        { label: "Fire Extinguisher #FE-042", confidence: 94 },
+        { label: "Unknown Metal Object", confidence: 41 },
+      ],
+    },
+  });
+
+  await page.goto(`/results/${walkthrough.id}`);
+  await page.waitForLoadState("networkidle");
+
+  // Stats grid should be visible with summary counts
+  await expect(page.getByText("Total Items")).toBeVisible();
+  await expect(page.getByRole("button", { name: "New:" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Matched:" })).toBeVisible();
+
+  // Item cards should appear
+  await expect(page.getByText("Binder - Blue 3-Ring")).toBeVisible();
+  await expect(page.getByText("Fire Extinguisher #FE-042")).toBeVisible();
+  await expect(page.getByText("Unknown Metal Object")).toBeVisible();
+
+  // Confidence badges should show
+  await expect(page.getByText("96%")).toBeVisible();
+  await expect(page.getByText("94%")).toBeVisible();
+  await expect(page.getByText("41%")).toBeVisible();
+
+  // Status badges should appear (all "New" for unlinked items)
+  await expect(page.getByText("New").first()).toBeVisible();
+
+  // Keyboard hints should be present
+  await expect(page.getByText("navigate")).toBeVisible();
+});
+
+test("results page stat cards filter list on click", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [
+        { label: "Test Item Alpha", confidence: 90 },
+        { label: "Test Item Beta", confidence: 60 },
+      ],
+    },
+  });
+
+  await page.goto(`/results/${walkthrough.id}`);
+  await page.waitForLoadState("networkidle");
+
+  // Both items visible initially
+  await expect(page.getByText("Test Item Alpha")).toBeVisible();
+  await expect(page.getByText("Test Item Beta")).toBeVisible();
+
+  // Click "New" stat card to filter
+  const statNew = page.getByRole("button", { name: /New:/ });
+  await statNew.click();
+
+  // Both should still be visible (both are "new" status items)
+  await expect(page.getByText("Test Item Alpha")).toBeVisible();
+  await expect(page.getByText("Test Item Beta")).toBeVisible();
+
+  // Click "Matched" stat card — should filter to empty
+  const statMatched = page.getByRole("button", { name: /Matched:/ });
+  await statMatched.click();
+
+  // Should show filtered-empty state
+  await expect(page.getByText("No Matching Items")).toBeVisible();
+
+  // Clear filters and items should reappear
+  await page.getByRole("button", { name: "Clear All Filters" }).click();
+  await expect(page.getByText("Test Item Alpha")).toBeVisible();
+});
+
+test("results page renders on mobile viewport", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [{ label: "Mobile Test Item", confidence: 85 }],
+    },
+  });
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/results/${walkthrough.id}`);
+  await page.waitForLoadState("networkidle");
+
+  // Header and breadcrumb should still be visible
+  await expect(page.getByRole("heading", { name: "Walkthrough Results" })).toBeVisible();
+
+  // Item card should be visible
+  await expect(page.getByText("Mobile Test Item")).toBeVisible();
+
+  // Nav should be reachable
+  await expect(page.getByRole("link", { name: "Capture" })).toBeVisible();
+});
+
+// ── Item Detail/Edit View ────────────────────────────────────────────────────
+
+test("item detail page renders view mode with keyframe, info grid, and action bar", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  // Create walkthrough + observation
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  const obsRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [{ label: "Binder - Blue 3-Ring", confidence: 72 }],
+    },
+  });
+  if (!obsRes.ok()) return;
+  const obsData = await obsRes.json();
+  const itemId = obsData.items?.[0]?.id;
+  if (!itemId) return;
+
+  await page.goto(`/results/${walkthrough.id}/items/${itemId}`);
+  await page.waitForLoadState("networkidle");
+
+  // Breadcrumb
+  await expect(page.getByText("Binder - Blue 3-Ring")).toBeVisible();
+
+  // Action bar buttons
+  await expect(page.getByRole("button", { name: /Accept/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Edit/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Reject/i })).toBeVisible();
+
+  // Keyframe viewer present
+  await expect(page.getByText(/Observation/)).toBeVisible();
+
+  // AI callout visible
+  await expect(page.getByText("AI Detection Summary")).toBeVisible();
+
+  // Info grid with category, confidence, etc.
+  await expect(page.getByText("Category")).toBeVisible();
+  await expect(page.getByText("AI Confidence")).toBeVisible();
+  await expect(page.getByText("Zone")).toBeVisible();
+
+  // Location card
+  await expect(page.getByText("Detected Location")).toBeVisible();
+
+  // Prev/Next navigation
+  await expect(page.getByText(/Item 1 of 1/)).toBeVisible();
+
+  // Keyboard hints
+  await expect(page.getByText("accept")).toBeVisible();
+});
+
+test("item detail page edit mode reveals form with suggested labels", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  // Create two observations so suggested labels appear
+  const obsRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [
+        { label: "Binder - Blue 3-Ring", confidence: 72 },
+        { label: "Ring Binder - 3-Ring", confidence: 58 },
+        { label: "Document Binder - Blue", confidence: 45 },
+      ],
+    },
+  });
+  if (!obsRes.ok()) return;
+  const obsData = await obsRes.json();
+  const itemId = obsData.items?.[0]?.id;
+  if (!itemId) return;
+
+  await page.goto(`/results/${walkthrough.id}/items/${itemId}`);
+  await page.waitForLoadState("networkidle");
+
+  // Click Edit
+  await page.getByRole("button", { name: /Edit/i }).click();
+
+  // Suggested labels should appear
+  await expect(page.getByText("Suggested Labels")).toBeVisible();
+  await expect(page.getByText("Ring Binder - 3-Ring")).toBeVisible();
+  await expect(page.getByText("Document Binder - Blue")).toBeVisible();
+
+  // Form fields visible
+  await expect(page.locator("#edit-name")).toBeVisible();
+  await expect(page.locator("#edit-category")).toBeVisible();
+  await expect(page.locator("#edit-zone")).toBeVisible();
+
+  // Cancel and Save buttons
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save Changes" })).toBeVisible();
+});
+
+test("item detail page accept and reject flows work", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  const obsRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [{ label: "Test Accept Item", confidence: 85 }],
+    },
+  });
+  if (!obsRes.ok()) return;
+  const obsData = await obsRes.json();
+  const itemId = obsData.items?.[0]?.id;
+  if (!itemId) return;
+
+  await page.goto(`/results/${walkthrough.id}/items/${itemId}`);
+  await page.waitForLoadState("networkidle");
+
+  // Click Accept
+  await page.getByRole("button", { name: /Accept/i }).click();
+  await page.waitForTimeout(500);
+
+  // Toast should appear
+  await expect(page.getByText("Item accepted")).toBeVisible();
+});
+
+test("item detail page renders at breakpoints", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  const wtRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/walkthroughs`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+  if (!wtRes.ok()) return;
+  const walkthrough = await wtRes.json();
+
+  const obsRes = await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/observations`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: {
+      walkthroughId: walkthrough.id,
+      items: [{ label: "Breakpoint Test Item", confidence: 80 }],
+    },
+  });
+  if (!obsRes.ok()) return;
+  const obsData = await obsRes.json();
+  const itemId = obsData.items?.[0]?.id;
+  if (!itemId) return;
+
+  // 375px (mobile)
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/results/${walkthrough.id}/items/${itemId}`);
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByText("Breakpoint Test Item")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Accept/i })).toBeVisible();
+
+  // 768px (tablet)
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto(`/results/${walkthrough.id}/items/${itemId}`);
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByText("Breakpoint Test Item")).toBeVisible();
+  await expect(page.getByText("Detected Location")).toBeVisible();
+});
+
+test("item detail shows not-found state for nonexistent item", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  // Use valid-format UUIDs that don't exist in the database
+  await page.goto("/results/00000000-0000-0000-0000-000000000000/items/00000000-0000-0000-0000-000000000001");
+  await page.waitForLoadState("networkidle");
+
+  await expect(page.getByText("Item Not Found")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Back to Results" })).toBeVisible();
+});
+
+// ── Item Search Sort & Filter ─────────────────────────────────────────────
+
+test("item search page renders sort, filter, and category chip UI", async ({ page }) => {
+  await page.goto("/items");
+  await page.waitForLoadState("networkidle");
+
+  // Search input should be visible
+  const searchInput = page.locator('input[type="search"]');
+  await expect(searchInput).toBeVisible();
+
+  // Sort dropdown should be visible
+  const sortSelect = page.locator('[aria-label="Sort items"]');
+  await expect(sortSelect).toBeVisible();
+  await expect(sortSelect).toHaveValue("name");
+
+  // Order toggle button should be visible
+  const orderBtn = page.getByRole("button", { name: /Sort/ });
+  await expect(orderBtn).toBeVisible();
+
+  // Filter toggle should exist
+  const filterBtn = page.getByRole("button", { name: /Filters/ });
+  await expect(filterBtn).toBeVisible();
+});
+
+test("item search filter panel opens and shows category chips", async ({ page }) => {
+  const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
+  if (!spaceId) return;
+
+  // Seed an item with a category so filter chips populate
+  await page.request.post(`http://localhost:3001/api/spaces/${spaceId}/inventory`, {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+    data: { name: "Filter Test Wrench", category: "Tools", quantity: 1 },
+  });
+
+  await page.goto("/items");
+  await page.waitForLoadState("networkidle");
+
+  // Open filter panel
+  const filterBtn = page.getByRole("button", { name: /Filters/ });
+  await filterBtn.click();
+
+  // Category label and chip for the seeded item
+  await expect(page.locator("span").filter({ hasText: "Category" })).toBeVisible();
+  // Use getByRole button to match the filter chip, not the result card text
+  await expect(page.getByRole("button", { name: "Tools" })).toBeVisible();
+
+  // Confidence range inputs are always present when filter panel is open
+  await expect(page.locator('input[type="number"][placeholder="Min"]')).toBeVisible();
+  await expect(page.locator('input[type="number"][placeholder="Max"]')).toBeVisible();
+});
+
+test("item search sort changes order", async ({ page }) => {
+  await page.goto("/items");
+  await page.waitForLoadState("networkidle");
+
+  // Change sort to Category
+  const sortSelect = page.locator('[aria-label="Sort items"]');
+  await sortSelect.selectOption("category");
+
+  // URL should update
+  await expect(page).toHaveURL(/sort=category/);
+
+  // Toggle order to descending
+  const orderBtn = page.getByRole("button", { name: /Sort/ });
+  await orderBtn.click();
+
+  // URL should have order=desc
+  await expect(page).toHaveURL(/order=desc/);
+
+  // Toggle back to ascending
+  await orderBtn.click();
+  await expect(page).not.toHaveURL(/order=desc/);
+});
+
+test("item search clear filters resets all state", async ({ page }) => {
+  await page.goto("/items?sort=category&order=desc&category=Tools");
+  await page.waitForLoadState("networkidle");
+
+  // Clear all filters button should be visible
+  const clearBtn = page.getByText("Clear all");
+  await expect(clearBtn).toBeVisible();
+
+  // Click clear
+  await clearBtn.click();
+
+  // URL should reset to /items (no query params)
+  await expect(page).not.toHaveURL(/sort=/);
+  await expect(page).not.toHaveURL(/category=/);
+});

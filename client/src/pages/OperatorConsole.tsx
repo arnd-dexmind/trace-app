@@ -3,6 +3,7 @@ import {
   listReviewQueue,
   getReviewTask,
   processAction,
+  bulkProcessActions,
   searchItems,
   type ReviewTask,
   type ItemObservation,
@@ -26,6 +27,8 @@ export function OperatorConsole() {
   const [mergeResults, setMergeResults] = useState<InventoryItem[]>([]);
   const [relabelingId, setRelabelingId] = useState<string | null>(null);
   const [relabelValue, setRelabelValue] = useState("");
+  const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+  const rangeAnchorRef = useRef<string | null>(null);
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -101,23 +104,76 @@ export function OperatorConsole() {
   };
 
   const handleBatchAccept = async () => {
-    if (!selectedId || batchSelection.size === 0) return;
+    if (batchSelection.size === 0) return;
     setError(null);
-    let firstError: string | null = null;
-    for (const obsId of batchSelection) {
-      try {
-        await processAction(selectedId, { actionType: "accept", observationId: obsId });
-      } catch (e) {
-        firstError = e instanceof Error ? e.message : "Batch accept failed";
+    try {
+      const { results } = await bulkProcessActions({
+        itemIds: [...batchSelection],
+        action: "accept",
+      });
+      const errors = results.filter((r) => r.status === "error");
+      if (errors.length > 0) {
+        setError(`${errors.length} of ${results.length} failed: ${errors[0].error}`);
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Batch accept failed");
     }
     setBatchSelection(new Set());
     fetchTasks();
-    if (detail) {
+    if (selectedId) {
       const updated = await getReviewTask(selectedId);
       setDetail(updated);
     }
-    if (firstError) setError(firstError);
+  };
+
+  const handleBatchReject = async () => {
+    if (batchSelection.size === 0) return;
+    setError(null);
+    try {
+      const { results } = await bulkProcessActions({
+        itemIds: [...batchSelection],
+        action: "reject",
+      });
+      const errors = results.filter((r) => r.status === "error");
+      if (errors.length > 0) {
+        setError(`${errors.length} of ${results.length} failed: ${errors[0].error}`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Batch reject failed");
+    }
+    setBatchSelection(new Set());
+    setShowRejectConfirm(false);
+    fetchTasks();
+    if (selectedId) {
+      const updated = await getReviewTask(selectedId);
+      setDetail(updated);
+    }
+  };
+
+  const handleRangeSelect = (obsId: string) => {
+    if (!detail) return;
+    const observations = detail.itemObservations || [];
+    setBatchSelection((prev) => {
+      const next = new Set(prev);
+      if (!rangeAnchorRef.current) {
+        rangeAnchorRef.current = obsId;
+        if (next.has(obsId)) next.delete(obsId);
+        else next.add(obsId);
+        return next;
+      }
+
+      const anchorIdx = observations.findIndex((o) => o.id === rangeAnchorRef.current);
+      const currentIdx = observations.findIndex((o) => o.id === obsId);
+      if (anchorIdx === -1 || currentIdx === -1) return next;
+
+      const [start, end] = anchorIdx < currentIdx ? [anchorIdx, currentIdx] : [currentIdx, anchorIdx];
+      const selectAll = !next.has(obsId);
+      for (let i = start; i <= end; i++) {
+        if (selectAll) next.add(observations[i].id);
+        else next.delete(observations[i].id);
+      }
+      return next;
+    });
   };
 
   const handleMerge = async (obsId: string, targetItemId: string) => {
@@ -237,7 +293,9 @@ export function OperatorConsole() {
             onMergeOpen={(obsId) => setMergeOpen(obsId)}
             batchSelection={batchSelection}
             onToggleBatch={toggleBatch}
+            onRangeSelect={handleRangeSelect}
             selectedId={selectedId!}
+            rangeAnchorRef={rangeAnchorRef}
             relabelingId={relabelingId}
             relabelValue={relabelValue}
             onRelabelStart={(obsId, currentLabel) => { setRelabelingId(obsId); setRelabelValue(currentLabel); }}
@@ -262,6 +320,7 @@ export function OperatorConsole() {
           batchSelection={batchSelection}
           onToggleBatch={toggleBatch}
           onBatchAccept={handleBatchAccept}
+          onBatchReject={() => setShowRejectConfirm(true)}
         />
       </aside>
 
@@ -322,6 +381,28 @@ export function OperatorConsole() {
         </div>
       )}
 
+      {/* Reject confirmation dialog */}
+      {showRejectConfirm && (
+        <div style={modalOverlayStyle} onClick={() => setShowRejectConfirm(false)}>
+          <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: 0, fontSize: "var(--sm-text-base)", fontWeight: 600, marginBottom: "var(--sm-space-3)" }}>
+              Reject {batchSelection.size} item{batchSelection.size !== 1 ? "s" : ""}?
+            </h3>
+            <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)", marginBottom: "var(--sm-space-4)" }}>
+              This will mark all selected observations as rejected. This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: "var(--sm-space-2)", justifyContent: "flex-end" }}>
+              <button style={btnStyle("outline")} onClick={() => setShowRejectConfirm(false)}>
+                Cancel
+              </button>
+              <button style={btnStyle("danger")} onClick={handleBatchReject}>
+                Reject All Selected
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile actions toggle */}
       <button
         style={fabStyle}
@@ -347,7 +428,9 @@ function DetailView({
   onMergeOpen,
   batchSelection,
   onToggleBatch,
+  onRangeSelect,
   selectedId,
+  rangeAnchorRef,
   relabelingId,
   relabelValue,
   onRelabelStart,
@@ -362,7 +445,9 @@ function DetailView({
   onMergeOpen: (obsId: string) => void;
   batchSelection: Set<string>;
   onToggleBatch: (obsId: string) => void;
+  onRangeSelect: (obsId: string) => void;
   selectedId: string;
+  rangeAnchorRef: React.MutableRefObject<string | null>;
   relabelingId: string | null;
   relabelValue: string;
   onRelabelStart: (obsId: string, currentLabel: string) => void;
@@ -445,11 +530,13 @@ function DetailView({
                   style={navBtnStyle}
                   disabled={selectedObsIndex === 0}
                   onClick={() => setSelectedObsIndex(Math.max(0, selectedObsIndex - 1))}
+                  aria-label="Previous observation"
                 >&#8592;</button>
                 <button
                   style={navBtnStyle}
                   disabled={selectedObsIndex >= observations.length - 1}
                   onClick={() => setSelectedObsIndex(Math.min(observations.length - 1, selectedObsIndex + 1))}
+                  aria-label="Next observation"
                 >&#8594;</button>
               </div>
             </div>
@@ -514,28 +601,69 @@ function DetailView({
           {/* Observation thumbnail strip */}
           {observations.length > 1 && (
             <div style={{ marginBottom: "var(--sm-space-6)" }}>
-              <h3 style={sectionTitleStyle}>All Observations ({observations.length})</h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--sm-space-3)" }}>
+                <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}>All Observations ({observations.length})</h3>
+                <label style={{ display: "flex", alignItems: "center", gap: "var(--sm-space-1)", fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={batchSelection.size === pendingObs.length && pendingObs.length > 0}
+                    onChange={() => {
+                      if (batchSelection.size === pendingObs.length) {
+                        onToggleBatch("__select_none__");
+                      } else {
+                        pendingObs.forEach((o) => onToggleBatch(o.id));
+                      }
+                    }}
+                    style={{ width: 14, height: 14 }}
+                  />
+                  Select all pending
+                </label>
+              </div>
               <div style={thumbnailStripStyle}>
                 {observations.map((obs, idx) => (
-                  <button
-                    key={obs.id}
-                    style={thumbStyle(idx === selectedObsIndex, obs.status)}
-                    onClick={() => setSelectedObsIndex(idx)}
-                  >
-                    <div style={thumbFrameStyle}>
-                      {obs.keyframeUrl ? (
-                        <img src={obs.keyframeUrl} alt="" style={thumbImgStyle} />
-                      ) : (
-                        <span style={{ fontSize: 10, color: "var(--sm-text-tertiary)" }}>No frame</span>
-                      )}
-                    </div>
-                    <div style={thumbLabelStyle}>{obs.label}</div>
-                    <div style={{ fontSize: 10, color: "var(--sm-text-tertiary)" }}>
-                      {obs.confidence != null ? Math.round(obs.confidence * 100) + "%" : "?"}
-                      {" · "}
-                      {obs.status}
-                    </div>
-                  </button>
+                  <div key={obs.id} style={{ position: "relative" }}>
+                    <button
+                      style={thumbStyle(idx === selectedObsIndex, obs.status)}
+                      onClick={(e: React.MouseEvent) => {
+                        if (e.shiftKey) {
+                          onRangeSelect(obs.id);
+                        } else {
+                          rangeAnchorRef.current = obs.id;
+                          setSelectedObsIndex(idx);
+                        }
+                      }}
+                    >
+                      <div style={thumbFrameStyle}>
+                        {obs.keyframeUrl ? (
+                          <img src={obs.keyframeUrl} alt={obs.label || "Observation keyframe"} style={thumbImgStyle} />
+                        ) : (
+                          <span style={{ fontSize: 10, color: "var(--sm-text-tertiary)" }}>No frame</span>
+                        )}
+                      </div>
+                      <div style={thumbLabelStyle}>{obs.label}</div>
+                      <div style={{ fontSize: 10, color: "var(--sm-text-tertiary)" }}>
+                        {obs.confidence != null ? Math.round(obs.confidence * 100) + "%" : "?"}
+                        {" · "}
+                        {obs.status}
+                      </div>
+                    </button>
+                    {obs.status === "pending" && (
+                      <label style={thumbCheckboxStyle}>
+                        <input
+                          type="checkbox"
+                          checked={batchSelection.has(obs.id)}
+                          onChange={(e) => {
+                            if ((e.nativeEvent as MouseEvent).shiftKey) {
+                              onRangeSelect(obs.id);
+                            } else {
+                              onToggleBatch(obs.id);
+                            }
+                          }}
+                          style={{ width: 12, height: 12 }}
+                        />
+                      </label>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -612,12 +740,14 @@ function ActionsView({
   batchSelection,
   onToggleBatch,
   onBatchAccept,
+  onBatchReject,
 }: {
   detail: ReviewTask | null;
   onAction: (type: string, obsId?: string, extra?: Record<string, string>) => void;
   batchSelection: Set<string>;
   onToggleBatch: (obsId: string) => void;
   onBatchAccept: () => void;
+  onBatchReject: () => void;
 }) {
   const [resolutionNote, setResolutionNote] = useState("");
 
@@ -644,36 +774,49 @@ function ActionsView({
       </h3>
 
       {/* Batch accept */}
-      {highConfPending.length > 1 ? (
+      {pendingObs.length > 0 && (
         <div style={quickAcceptStyle}>
-          <div style={{ fontSize: "var(--sm-text-xs)", fontWeight: 600, color: "var(--sm-success-700)", marginBottom: "var(--sm-space-2)" }}>
-            {highConfPending.length} high-confidence candidates
+          <div style={{ fontSize: "var(--sm-text-xs)", fontWeight: 600, color: "var(--sm-text-secondary)", marginBottom: "var(--sm-space-2)" }}>
+            {pendingObs.length} pending observation{pendingObs.length !== 1 ? "s" : ""}
+            {batchSelection.size > 0 && ` — ${batchSelection.size} selected`}
           </div>
-          <div style={{ marginBottom: "var(--sm-space-2)" }}>
-            {highConfPending.map((obs) => (
-              <label key={obs.id} style={checkboxRowStyle}>
-                <input
-                  type="checkbox"
-                  checked={batchSelection.has(obs.id)}
-                  onChange={() => onToggleBatch(obs.id)}
-                  style={{ width: 14, height: 14 }}
-                />
-                <span style={{ fontSize: "var(--sm-text-xs)", fontWeight: 500 }}>{obs.label}</span>
-                <span style={{ fontSize: 10, color: "var(--sm-text-tertiary)" }}>
-                  {obs.confidence != null ? Math.round(obs.confidence * 100) + "%" : "?"}
-                </span>
-              </label>
-            ))}
-          </div>
-          <button
-            style={btnStyle("success", true)}
-            disabled={batchSelection.size === 0}
-            onClick={onBatchAccept}
-          >
-            Accept Selected ({batchSelection.size})
-          </button>
+          {pendingObs.length <= 12 && (
+            <div style={{ marginBottom: "var(--sm-space-2)" }}>
+              {pendingObs.map((obs) => (
+                <label key={obs.id} style={checkboxRowStyle}>
+                  <input
+                    type="checkbox"
+                    checked={batchSelection.has(obs.id)}
+                    onChange={() => onToggleBatch(obs.id)}
+                    style={{ width: 14, height: 14 }}
+                  />
+                  <span style={{ fontSize: "var(--sm-text-xs)", fontWeight: 500 }}>{obs.label}</span>
+                  <span style={{ fontSize: 10, color: "var(--sm-text-tertiary)" }}>
+                    {obs.confidence != null ? Math.round(obs.confidence * 100) + "%" : "?"}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+          {batchSelection.size > 0 && (
+            <div style={{ display: "flex", gap: "var(--sm-space-2)", flexWrap: "wrap" }}>
+              <button
+                style={btnStyle("success", true)}
+                onClick={onBatchAccept}
+              >
+                Accept Selected ({batchSelection.size})
+              </button>
+              <button
+                style={btnStyle("danger", true)}
+                onClick={onBatchReject}
+              >
+                Reject Selected ({batchSelection.size})
+              </button>
+            </div>
+          )}
         </div>
-      ) : highConfPending.length === 1 ? (
+      )}
+      {highConfPending.length === 1 && pendingObs.length === 1 && (
         <div style={quickAcceptStyle}>
           <div style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-success-700)", marginBottom: "var(--sm-space-2)" }}>
             High confidence — quick accept
@@ -685,7 +828,7 @@ function ActionsView({
             Confirm Identity &amp; Location
           </button>
         </div>
-      ) : null}
+      )}
 
       {/* Quick stats */}
       {pendingObs.length > 0 && (
@@ -1220,6 +1363,20 @@ const mergeResultStyle: React.CSSProperties = {
   textAlign: "left",
 };
 
+const thumbCheckboxStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 2,
+  left: 2,
+  zIndex: 5,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "var(--sm-surface-card)",
+  borderRadius: "var(--sm-radius-sm)",
+  width: 18,
+  height: 18,
+};
+
 const relabelInputStyle: React.CSSProperties = {
   font: "inherit",
   fontSize: "var(--sm-text-lg)",
@@ -1229,7 +1386,6 @@ const relabelInputStyle: React.CSSProperties = {
   borderRadius: "var(--sm-radius-md)",
   background: "var(--sm-surface-card)",
   color: "var(--sm-text-primary)",
-  outline: "none",
   maxWidth: 280,
 };
 

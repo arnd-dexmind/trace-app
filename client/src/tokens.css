@@ -50,7 +50,7 @@
   /* --- Color: Text --- */
   --sm-text-primary: var(--sm-neutral-900);
   --sm-text-secondary: var(--sm-neutral-600);
-  --sm-text-tertiary: var(--sm-neutral-400);
+  --sm-text-tertiary: var(--sm-neutral-500);
   --sm-text-inverse: #ffffff;
   --sm-text-link: var(--sm-brand-600);
 
@@ -156,6 +156,43 @@ body {
   color: var(--sm-text-primary);
   background: var(--sm-surface-page);
   -webkit-font-smoothing: antialiased;
+}
+
+/* --- Accessibility: Focus visible --- */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--sm-border-focus);
+  outline-offset: 2px;
+  border-radius: var(--sm-radius-sm);
+}
+
+/* --- Accessibility: Touch targets --- */
+button,
+[role="button"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+input[type="checkbox"] {
+  min-height: var(--sm-touch-target);
+}
+
+select {
+  min-height: var(--sm-touch-target);
+}
+
+/* --- Accessibility: Reduced motion --- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* --- Utility classes (Tailwind-like minimal set) --- */
