@@ -8,6 +8,25 @@ import {
   type WalkthroughResultItem,
 } from "../api";
 import { Button } from "../components/ui/Button";
+import { StatusBadge } from "../components/ui/StatusBadge";
+import type { ProcessingStatus } from "../components/ui/StatusBadge";
+import { useProcessingStatus } from "../hooks/useProcessingStatus";
+
+function mapWalkthroughStatus(status: string): ProcessingStatus {
+  switch (status) {
+    case "uploaded": return "pending";
+    case "processing": return "processing";
+    case "awaiting_review":
+    case "applied": return "completed";
+    default: return "pending";
+  }
+}
+
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 type FilterStatus = "all" | "new" | "matched" | "relocated" | "missing";
 type FilterConfidence = "all" | "high" | "medium" | "low";
@@ -63,6 +82,25 @@ export function Results() {
 
   const isNarrow = vw <= 640;
   const isMedium = vw <= 768;
+
+  // Processing status polling
+  const procState = useProcessingStatus(walkthroughId);
+
+  // Re-fetch results when processing completes
+  useEffect(() => {
+    if (procState.status === "completed" && pageState === "loading") {
+      if (!walkthroughId || !spaceId) return;
+      getWalkthroughResults(spaceId, walkthroughId)
+        .then((res) => {
+          setData(res);
+          setPageState(res && res.items.length > 0 ? "ready" : "empty");
+        })
+        .catch((err) => {
+          setPageState("error");
+          setErrorMsg(err instanceof Error ? err.message : "Failed to load results");
+        });
+    }
+  }, [procState.status, walkthroughId, spaceId, pageState]);
 
   // Fetch results
   useEffect(() => {
@@ -276,7 +314,13 @@ export function Results() {
         <div>
           <h1 style={titleStyle(isMedium)}>Walkthrough Results</h1>
           <p style={subtitleStyle}>
-            {data.items.length} items detected &middot; Status: {data.status}
+            {data.items.length} items detected &middot;{" "}
+            <StatusBadge status={mapWalkthroughStatus(data.status)} label={data.status} size="sm" />
+            {procState.elapsed > 120 && procState.status === "processing" && (
+              <span style={{ marginLeft: "var(--sm-space-2)", fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)" }}>
+                {formatElapsed(procState.elapsed)}
+              </span>
+            )}
           </p>
         </div>
         <div style={headerActionsStyle(isMedium)}>
@@ -286,6 +330,7 @@ export function Results() {
           <Link to="/upload">
             <Button variant="outline" size="md">Upload Another</Button>
           </Link>
+          <Button variant="ghost" size="md" onClick={() => window.location.reload()}>Refresh</Button>
         </div>
       </div>
 

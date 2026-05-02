@@ -1,14 +1,21 @@
 import { test, expect } from "@playwright/test";
 
-// Set up localStorage before each test so the app has a tenant and space context
+// Set up localStorage before each test so the app has a tenant and space context.
+// Must bypass the onboarding gate first, otherwise the app redirects to /welcome.
 test.beforeEach(async ({ page }) => {
+  // Set tenant in localStorage first (before any navigation to avoid onboarding redirect)
   await page.goto("/");
-
-  // The app reads tenant/space from localStorage. Inject them.
   await page.evaluate(() => {
     localStorage.setItem("trace-tenant-id", "qa-tenant");
   });
 
+  // Bypass the onboarding gate: create a UserOnboarding record so isFirstRun=false
+  // and mark tour complete so the GuidedTour overlay doesn't block clicks.
+  await page.request.post("http://localhost:3001/api/onboarding/tour/complete", {
+    headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
+  });
+
+  // Create a test space
   const spaceRes = await page.request.post("http://localhost:3001/api/spaces", {
     headers: { "content-type": "application/json", "x-tenant-id": "qa-tenant" },
     data: { name: "QA Test Space", description: "Smoke test space" },
@@ -21,8 +28,9 @@ test.beforeEach(async ({ page }) => {
     }, space.id);
   }
 
-  // Reload to pick up localStorage values
+  // Reload to pick up localStorage values and onboarding status
   await page.reload();
+  await page.waitForLoadState("networkidle");
 });
 
 test("item search page renders", async ({ page }) => {
@@ -48,9 +56,9 @@ test("repair list page renders with filter bar", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Repair Issues" })).toBeVisible();
 
   // Filter buttons
-  await expect(page.getByRole("button", { name: /All/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Open/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Monitoring/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^All/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Open/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /In Progress/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Resolved/ })).toBeVisible();
 
   // Empty state should show when no repairs exist
@@ -100,7 +108,7 @@ test("upload flow page loads via nav", async ({ page }) => {
   await page.waitForLoadState("networkidle");
 
   // TopNav should be visible with PerifEye branding
-  await expect(page.getByText("PerifEye")).toBeVisible();
+  await expect(page.getByRole("link", { name: "PerifEye home" })).toBeVisible();
 
   // Nav links
   await expect(page.getByRole("link", { name: "Review" })).toBeVisible();
@@ -215,7 +223,7 @@ test("capture page renders drop zone and accepts file selection", async ({ page 
   await expect(page.getByRole("heading", { name: "Inventory Capture" })).toBeVisible();
 
   // Subtitle
-  await expect(page.getByText("Upload photos or videos of your space")).toBeVisible();
+  await expect(page.getByText(/Upload photos or videos of your space/)).toBeVisible();
 
   // Drop zone should be visible
   const dropZone = page.getByText("Drop photos or videos here");
@@ -317,8 +325,8 @@ test("results page renders stats grid and item cards with observations", async (
 
   // Stats grid should be visible with summary counts
   await expect(page.getByText("Total Items")).toBeVisible();
-  await expect(page.getByRole("button", { name: "New:" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Matched:" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /New:/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Matched:/ })).toBeVisible();
 
   // Item cards should appear
   await expect(page.getByText("Binder - Blue 3-Ring")).toBeVisible();
@@ -676,6 +684,31 @@ test("item search sort changes order", async ({ page }) => {
   // Toggle back to ascending
   await orderBtn.click();
   await expect(page).not.toHaveURL(/order=desc/);
+});
+
+test("upload page renders camera capture inputs for photo and video", async ({ page }) => {
+  await page.goto("/upload");
+  await page.waitForLoadState("networkidle");
+
+  // Camera capture inputs should be in DOM (hidden via display:none)
+  const photoInput = page.locator('input[type="file"][capture="environment"][accept="image/*"]');
+  const videoInput = page.locator('input[type="file"][capture="environment"][accept="video/*"]');
+  await expect(photoInput).toBeAttached();
+  await expect(videoInput).toBeAttached();
+});
+
+test("capture page renders camera capture-enabled file inputs", async ({ page }) => {
+  await page.goto("/capture");
+  await page.waitForLoadState("networkidle");
+
+  // Capture page should also have camera-enabled file inputs
+  const fileInputs = page.locator('input[type="file"]');
+  const count = await fileInputs.count();
+  expect(count).toBeGreaterThan(0);
+
+  // At least one should accept images
+  const imageInputs = page.locator('input[type="file"][accept*="image"]');
+  await expect(imageInputs.first()).toBeAttached();
 });
 
 test("item search clear filters resets all state", async ({ page }) => {

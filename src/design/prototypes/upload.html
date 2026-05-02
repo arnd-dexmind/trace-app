@@ -116,6 +116,62 @@
   }
   .file-input { display: none; }
 
+  /* --- Camera capture section --- */
+  .capture-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    margin-bottom: var(--sm-space-6);
+    color: var(--sm-text-tertiary);
+    font-size: var(--sm-text-sm);
+  }
+  .capture-divider::before,
+  .capture-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--sm-border-default);
+  }
+  .capture-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sm-space-3);
+    margin-bottom: var(--sm-space-6);
+  }
+  .capture-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sm-space-2);
+    padding: var(--sm-space-6) var(--sm-space-4);
+    border: 2px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-xl);
+    background: var(--sm-surface-card);
+    cursor: pointer;
+    transition: all var(--sm-transition-fast);
+    min-height: 100px;
+    text-align: center;
+  }
+  .capture-btn:hover {
+    border-color: var(--sm-brand-400);
+    background: var(--sm-brand-50);
+  }
+  .capture-btn .cb-icon { font-size: 32px; display: block; }
+  .capture-btn .cb-label {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-primary);
+  }
+  .capture-btn .cb-hint {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+  }
+  @media (max-width: 640px) {
+    .capture-options { grid-template-columns: 1fr; }
+    .capture-btn { min-height: 80px; padding: var(--sm-space-4); }
+  }
+
   /* --- Progress states --- */
   .upload-state {
     display: none;
@@ -346,6 +402,23 @@
         <p class="dz-formats">MP4, MOV, or image sequence (ZIP) &middot; up to 2 GB</p>
       </div>
       <input type="file" class="file-input" id="file-input" accept="video/mp4,video/quicktime,application/zip" />
+
+      <!-- Camera / direct capture options (mobile-primary) -->
+      <div class="capture-divider" aria-hidden="true">or</div>
+      <div class="capture-options">
+        <button class="capture-btn" id="btn-capture-photo" type="button">
+          <span class="cb-icon">&#128247;</span>
+          <span class="cb-label">Take Photo</span>
+          <span class="cb-hint">Use device camera</span>
+        </button>
+        <button class="capture-btn" id="btn-capture-video" type="button">
+          <span class="cb-icon">&#127909;</span>
+          <span class="cb-label">Record Video</span>
+          <span class="cb-hint">Capture walkthrough</span>
+        </button>
+      </div>
+      <input type="file" class="file-input" id="camera-photo-input" accept="image/*" capture="environment" />
+      <input type="file" class="file-input" id="camera-video-input" accept="video/*" capture="environment" />
     </div>
 
     <!-- State: File selected -->
@@ -459,6 +532,32 @@
 
   // Drop zone click -> file picker
   dropZone.addEventListener('click', function() { fileInput.click(); });
+
+  // Camera capture buttons (mobile)
+  // Lens: Fitts's Law — large tap targets for thumb-zone camera access
+  var cameraPhotoInput = document.getElementById('camera-photo-input');
+  var cameraVideoInput = document.getElementById('camera-video-input');
+
+  document.getElementById('btn-capture-photo').addEventListener('click', function() {
+    cameraPhotoInput.click();
+  });
+  document.getElementById('btn-capture-video').addEventListener('click', function() {
+    cameraVideoInput.click();
+  });
+
+  function handleCameraFile(file) {
+    if (!file) return;
+    document.getElementById('selected-name').textContent = file.name;
+    document.getElementById('selected-size').textContent = (file.size / 1e6).toFixed(1) + ' MB';
+    showState('selected');
+  }
+
+  cameraPhotoInput.addEventListener('change', function(e) {
+    handleCameraFile(e.target.files[0]);
+  });
+  cameraVideoInput.addEventListener('change', function(e) {
+    handleCameraFile(e.target.files[0]);
+  });
 
   // File selected
   fileInput.addEventListener('change', function(e) {

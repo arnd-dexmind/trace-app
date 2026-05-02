@@ -219,7 +219,7 @@ export function Upload() {
       {/* ── Space Selector ── */}
       <div style={spaceSelectorStyle}>
         <label style={labelStyle} htmlFor="upload-space-select">Space</label>
-        <div style={{ display: "flex", gap: "var(--sm-space-2)", flex: 1 }}>
+        <div style={{ display: "flex", gap: "var(--sm-space-2)", flex: 1, minWidth: 0 }}>
           <select
             id="upload-space-select"
             value={activeSpaceId}

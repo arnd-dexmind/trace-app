@@ -2,6 +2,9 @@ import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { TopNav } from "./components/TopNav";
 import { GuidedTour } from "./components/GuidedTour";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ToastProvider } from "./components/ToastProvider";
+import { NetworkDetector } from "./components/NetworkDetector";
 import { useOnboarding } from "./hooks/useOnboarding";
 import { Dashboard } from "./pages/Dashboard";
 import { OperatorConsole } from "./pages/OperatorConsole";
@@ -15,6 +18,9 @@ import { Processing } from "./pages/Processing";
 import { Results } from "./pages/Results";
 import { ItemDetailEdit } from "./pages/ItemDetailEdit";
 import { Spaces } from "./pages/Spaces";
+import { Analytics } from "./pages/Analytics";
+import { Team } from "./pages/Team";
+import { Share } from "./pages/Share";
 import { Welcome } from "./pages/Welcome";
 
 function OnboardingGate({ children }: { children: React.ReactNode }) {
@@ -69,24 +75,33 @@ function OnboardingGate({ children }: { children: React.ReactNode }) {
 export function App() {
   return (
     <BrowserRouter>
-      <OnboardingGate>
-        <TopNav />
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/welcome" element={<Welcome />} />
-          <Route path="/spaces" element={<Spaces />} />
-          <Route path="/review" element={<OperatorConsole />} />
-          <Route path="/items" element={<ItemSearch />} />
-          <Route path="/items/:itemId" element={<ItemDetail />} />
-          <Route path="/repairs" element={<RepairList />} />
-          <Route path="/repairs/:repairId" element={<RepairDetail />} />
-          <Route path="/upload" element={<Upload />} />
-          <Route path="/capture" element={<Capture />} />
-          <Route path="/processing/:walkthroughId" element={<Processing />} />
-          <Route path="/results/:walkthroughId" element={<Results />} />
-          <Route path="/results/:walkthroughId/items/:itemId" element={<ItemDetailEdit />} />
-        </Routes>
-      </OnboardingGate>
+      <ErrorBoundary>
+        <ToastProvider>
+          <NetworkDetector />
+          <OnboardingGate>
+            <TopNav />
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/welcome" element={<Welcome />} />
+              <Route path="/spaces" element={<Spaces />} />
+              <Route path="/review" element={<OperatorConsole />} />
+              <Route path="/items" element={<ItemSearch />} />
+              <Route path="/items/:itemId" element={<ItemDetail />} />
+              <Route path="/repairs" element={<RepairList />} />
+              <Route path="/repairs/:repairId" element={<RepairDetail />} />
+              <Route path="/upload" element={<Upload />} />
+              <Route path="/capture" element={<Capture />} />
+              <Route path="/processing/:walkthroughId" element={<Processing />} />
+              <Route path="/results/:walkthroughId" element={<Results />} />
+              <Route path="/results/:walkthroughId/items/:itemId" element={<ItemDetailEdit />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/team" element={<Team />} />
+              <Route path="/share/:token" element={<Share />} />
+            </Routes>
+          </OnboardingGate>
+        </ToastProvider>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

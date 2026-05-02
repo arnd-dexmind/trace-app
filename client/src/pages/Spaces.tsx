@@ -18,6 +18,7 @@ export function Spaces() {
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const selectedSpaceId = getSpaceId();
 
   // Form state
@@ -74,6 +75,7 @@ export function Spaces() {
     try {
       await deleteSpace(deletingId);
       setDeletingId(null);
+      setDeleteConfirmText("");
       if (selectedSpaceId === deletingId) {
         setSpaceId("");
       }
@@ -169,20 +171,36 @@ export function Spaces() {
       )}
 
       {/* Delete confirmation */}
-      {deletingId && (
-        <div style={modalBackdrop} onClick={() => setDeletingId(null)}>
-          <div style={modalCard} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: "var(--sm-text-base)", fontWeight: 600, margin: 0 }}>Delete Space</h3>
-            <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)", margin: "8px 0 0" }}>
-              This permanently deletes the space and all associated data (walkthroughs, items, repairs, zones). This action cannot be undone.
-            </p>
-            <div style={{ display: "flex", gap: "var(--sm-space-3)", marginTop: "var(--sm-space-5)", justifyContent: "flex-end" }}>
-              <Button variant="ghost" size="sm" onClick={() => setDeletingId(null)}>Cancel</Button>
-              <Button variant="danger" size="sm" onClick={handleDelete}>Delete</Button>
+      {deletingId && (() => {
+        const deletingName = spaces.find((s) => s.id === deletingId)?.name || "";
+        const confirmMatch = deleteConfirmText === deletingName;
+        const closeModal = () => { setDeletingId(null); setDeleteConfirmText(""); };
+        return (
+          <div style={modalBackdrop} onClick={closeModal}>
+            <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+              <h3 style={{ fontSize: "var(--sm-text-base)", fontWeight: 600, margin: 0 }}>Delete Space</h3>
+              <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)", margin: "8px 0 0" }}>
+                This permanently deletes the space and all associated data (walkthroughs, items, repairs, zones). This action cannot be undone.
+              </p>
+              <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)", margin: "var(--sm-space-4) 0 0" }}>
+                Type <strong>{deletingName}</strong> to confirm:
+              </p>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                style={textInput}
+                placeholder={deletingName}
+                autoFocus
+              />
+              <div style={{ display: "flex", gap: "var(--sm-space-3)", marginTop: "var(--sm-space-5)", justifyContent: "flex-end" }}>
+                <Button variant="ghost" size="sm" onClick={closeModal}>Cancel</Button>
+                <Button variant="danger" size="sm" onClick={handleDelete} disabled={!confirmMatch}>Delete</Button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Content */}
       {loading ? (
@@ -201,7 +219,7 @@ export function Spaces() {
           {spaces.map((s) => (
             <div key={s.id} style={spaceCard}>
               <div style={cardBody}>
-                <Link to={`/?space=${s.id}`} style={spaceLink} onClick={() => setSpaceId(s.id)}>
+                <Link to={`/dashboard?space=${s.id}`} style={spaceLink} onClick={() => setSpaceId(s.id)}>
                   <h3 style={{ fontSize: "var(--sm-text-base)", fontWeight: 600, margin: 0, color: "var(--sm-text-primary)" }}>
                     {s.name}
                   </h3>
@@ -224,7 +242,7 @@ export function Spaces() {
                 </div>
               </div>
               <div style={cardActions}>
-                <Link to={`/?space=${s.id}`} onClick={() => setSpaceId(s.id)}>
+                <Link to={`/dashboard?space=${s.id}`} onClick={() => setSpaceId(s.id)}>
                   <Button variant="outline" size="sm">Dashboard</Button>
                 </Link>
                 <Button variant="ghost" size="sm" onClick={() => startEdit(s)}>Edit</Button>

@@ -397,6 +397,31 @@ export function listRepairs(spaceId: string, status?: string) {
   return request<RepairIssue[]>(`/api/spaces/${spaceId}/repairs${qs}`);
 }
 
+export interface FetchAllRepairsParams {
+  spaceId?: string;
+  status?: string;
+  severity?: string;
+  sort?: string;
+}
+
+export function fetchAllRepairs(params: FetchAllRepairsParams) {
+  const spaceId = params.spaceId || getSpaceId();
+  if (!spaceId) return Promise.resolve({ data: [] as RepairIssue[] });
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.severity) qs.set("severity", params.severity);
+  if (params.sort) qs.set("sort", params.sort);
+  const q = qs.toString();
+  return request<RepairIssue[]>(`/api/spaces/${spaceId}/repairs${q ? `?${q}` : ""}`)
+    .then((data) => ({ data }));
+}
+
+export function patchRepair(issueId: string, newStatus: string) {
+  const spaceId = getSpaceId();
+  if (!spaceId) return Promise.reject(new Error("No space selected"));
+  return updateRepairStatus(spaceId, issueId, newStatus);
+}
+
 export function getRepair(spaceId: string, issueId: string) {
   return request<RepairIssue>(`/api/spaces/${spaceId}/repairs/${issueId}`);
 }

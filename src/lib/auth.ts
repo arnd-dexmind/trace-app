@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { getAuth } from "@clerk/express";
 import { db } from "./db.js";
-import { sendApiError } from "./errors.js";
+import { sendApiError, UserNotFoundError } from "./errors.js";
 
 const CLERK_ENABLED = Boolean(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY);
 
@@ -27,6 +27,12 @@ async function ensureTenantAccess(userId: string, tenantId: string) {
   return true;
 }
 
+export async function requireUser(clerkId: string) {
+  const user = await db.user.findUnique({ where: { clerkId } });
+  if (!user) throw new UserNotFoundError();
+  return user;
+}
+
 export function createAuthMiddleware(): RequestHandler {
   if (!CLERK_ENABLED) {
     // Fallback to tenant-only auth for dev/test
@@ -37,6 +43,7 @@ export function createAuthMiddleware(): RequestHandler {
         return;
       }
       res.locals.tenantId = tenantId;
+      res.locals.userId = "dev-user";
       next();
     };
   }

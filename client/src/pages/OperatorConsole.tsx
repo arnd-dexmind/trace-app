@@ -197,7 +197,7 @@ export function OperatorConsole() {
   const completedCount = tasks.filter((t) => t.status === "completed").length;
 
   return (
-    <div style={consoleStyle}>
+    <div className="review-console" style={consoleStyle}>
       {/* Header */}
       <header style={headerStyle}>
         <h1 style={{ fontSize: "var(--sm-text-lg)", fontWeight: 600, margin: 0 }}>Operator Console</h1>
@@ -217,7 +217,7 @@ export function OperatorConsole() {
       )}
 
       {/* Queue Panel (Left) */}
-      <nav style={queuePanelStyle} aria-label="Candidate queue">
+      <nav className="queue-panel" style={queuePanelStyle} aria-label="Candidate queue">
         <div style={tabsStyle}>
           <button
             style={tabStyle(activeTab === "pending")}
@@ -308,10 +308,8 @@ export function OperatorConsole() {
 
       {/* Actions Panel (Right) */}
       <aside
-        style={{
-          ...actionsStyle,
-          transform: actionsOpen ? "translateX(0)" : undefined,
-        }}
+        className={`actions-panel${actionsOpen ? " open" : ""}`}
+        style={actionsStyle}
         id="actions-panel"
       >
         <ActionsView
@@ -405,6 +403,7 @@ export function OperatorConsole() {
 
       {/* Mobile actions toggle */}
       <button
+        className="review-fab"
         style={fabStyle}
         onClick={() => setActionsOpen(!actionsOpen)}
         aria-label="Toggle actions panel"
@@ -412,7 +411,7 @@ export function OperatorConsole() {
         {actionsOpen ? "✕" : "⚙"}
       </button>
       {actionsOpen && (
-        <div style={overlayStyle} onClick={() => setActionsOpen(false)} />
+        <div className="review-overlay" style={overlayStyle} onClick={() => setActionsOpen(false)} />
       )}
     </div>
   );

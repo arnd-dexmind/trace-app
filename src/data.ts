@@ -534,6 +534,45 @@ export async function listRepairs(
   );
 }
 
+export async function listAllRepairs(
+  db: PrismaClient,
+  tenantId: string,
+  params: {
+    spaceId?: string;
+    status?: string;
+    severity?: string;
+    cursor?: string;
+    limit?: number;
+    sort?: "newest" | "severity";
+  },
+) {
+  const where: Record<string, unknown> = { tenantId };
+  if (params.spaceId) where.spaceId = params.spaceId;
+  if (params.status) where.status = params.status;
+  if (params.severity) where.severity = params.severity;
+
+  const orderBy: Record<string, string>[] = [];
+  if (params.sort === "severity") {
+    // critical first: map severity to a sortable value
+    orderBy.push({ severity: "asc" }); // low < medium < high (lexical works here)
+    orderBy.push({ createdAt: "desc" });
+  } else {
+    orderBy.push({ createdAt: "desc" });
+  }
+
+  return paginate(
+    (take) =>
+      db.repairIssue.findMany({
+        where,
+        orderBy,
+        take,
+        ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+      }),
+    params.cursor,
+    params.limit,
+  );
+}
+
 export async function createRepair(
   db: PrismaClient,
   params: {
@@ -1622,4 +1661,101 @@ export async function processBulkActions(
   }
 
   return results;
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export async function getNotifications(
+  db: PrismaClient,
+  userId: string,
+  tenantId: string,
+  cursor?: string,
+  limit?: number,
+) {
+  return paginate(
+    (take) =>
+      db.notification.findMany({
+        where: { userId, tenantId },
+        orderBy: { createdAt: "desc" },
+        take,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      }),
+    cursor,
+    limit,
+  );
+}
+
+export async function markNotificationRead(
+  db: PrismaClient,
+  notificationId: string,
+  userId: string,
+) {
+  const notification = await db.notification.findFirst({
+    where: { id: notificationId, userId },
+  });
+  if (!notification) return null;
+  return db.notification.update({
+    where: { id: notificationId },
+    data: { readAt: new Date() },
+  });
+}
+
+export async function markAllNotificationsRead(
+  db: PrismaClient,
+  userId: string,
+) {
+  const result = await db.notification.updateMany({
+    where: { userId, readAt: null },
+    data: { readAt: new Date() },
+  });
+  return result.count;
+}
+
+export async function getNotificationPreferences(
+  db: PrismaClient,
+  userId: string,
+  tenantId: string,
+) {
+  const prefs = await db.notificationPreference.findUnique({
+    where: { userId },
+  });
+  if (prefs) return prefs;
+
+  return db.notificationPreference.create({
+    data: { userId, tenantId },
+  });
+}
+
+export async function updateNotificationPreferences(
+  db: PrismaClient,
+  userId: string,
+  tenantId: string,
+  updates: {
+    inApp?: boolean;
+    email?: boolean;
+    walkthroughComplete?: boolean;
+    newIssue?: boolean;
+    issueResolved?: boolean;
+  },
+) {
+  const prefs = await db.notificationPreference.upsert({
+    where: { userId },
+    create: { userId, tenantId, ...updates },
+    update: updates,
+  });
+  return prefs;
+}
+
+export async function createNotification(
+  db: PrismaClient,
+  params: {
+    userId: string;
+    tenantId: string;
+    type: string;
+    title: string;
+    body?: string;
+    actionUrl?: string;
+  },
+) {
+  return db.notification.create({ data: params });
 }

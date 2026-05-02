@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Walkthrough Results — PerifEye</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+  .app-shell {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 var(--sm-space-4);
+  }
+
+  /* --- Top nav --- */
+  .top-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-4) 0;
+    border-bottom: 1px solid var(--sm-border-default);
+    margin-bottom: var(--sm-space-6);
+  }
+  .top-nav .logo {
+    font-size: var(--sm-text-lg);
+    font-weight: var(--sm-font-bold);
+    color: var(--sm-text-primary);
+    text-decoration: none;
+  }
+  .top-nav .nav-link {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-secondary);
+    text-decoration: none;
+    padding: var(--sm-space-1) var(--sm-space-2);
+    border-radius: var(--sm-radius-md);
+  }
+  .top-nav .nav-link:hover { color: var(--sm-text-primary); background: var(--sm-neutral-100); }
+  .top-nav .nav-link.active { color: var(--sm-brand-600); }
+
+  /* --- Breadcrumb --- */
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-2);
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+    margin-bottom: var(--sm-space-4);
+  }
+  .breadcrumb a { color: var(--sm-text-link); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb .sep { color: var(--sm-text-tertiary); }
+
+  /* --- Page header --- */
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--sm-space-4);
+    margin-bottom: var(--sm-space-6);
+    flex-wrap: wrap;
+  }
+  .page-header h1 {
+    font-size: var(--sm-text-2xl);
+    font-weight: var(--sm-font-bold);
+    margin-bottom: var(--sm-space-1);
+  }
+  .page-header .subtitle {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+  }
+  .header-actions {
+    display: flex;
+    gap: var(--sm-space-3);
+    flex-wrap: wrap;
+  }
+
+  /* --- Stats grid --- */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--sm-space-3);
+    margin-bottom: var(--sm-space-8);
+  }
+  .stat-card {
+    text-align: center;
+    padding: var(--sm-space-4);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-lg);
+    background: var(--sm-surface-card);
+    cursor: pointer;
+    transition: border-color var(--sm-transition-fast), box-shadow var(--sm-transition-fast);
+  }
+  .stat-card:hover { border-color: var(--sm-brand-300); box-shadow: var(--sm-shadow-sm); }
+  .stat-card.active {
+    border-color: var(--sm-brand-500);
+    background: var(--sm-brand-50);
+  }
+  .stat-card .stat-value {
+    font-size: var(--sm-text-2xl);
+    font-weight: var(--sm-font-bold);
+    line-height: var(--sm-leading-tight);
+  }
+  .stat-card .stat-label {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-secondary);
+    margin-top: var(--sm-space-1);
+  }
+  .stat-value.total { color: var(--sm-text-primary); }
+  .stat-value.new { color: var(--sm-success-600); }
+  .stat-value.matched { color: var(--sm-brand-600); }
+  .stat-value.relocated { color: var(--sm-warning-600); }
+  .stat-value.missing { color: var(--sm-danger-600); }
+
+  /* --- Toolbar --- */
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--sm-space-4);
+    margin-bottom: var(--sm-space-4);
+    flex-wrap: wrap;
+  }
+  .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-3);
+  }
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-2);
+  }
+  .filter-pill {
+    font-size: var(--sm-text-xs);
+    font-weight: var(--sm-font-medium);
+    padding: var(--sm-space-1) var(--sm-space-3);
+    border-radius: var(--sm-radius-full);
+    border: 1px solid var(--sm-border-default);
+    background: var(--sm-surface-card);
+    color: var(--sm-text-secondary);
+    cursor: pointer;
+    transition: all var(--sm-transition-fast);
+    white-space: nowrap;
+  }
+  .filter-pill:hover { border-color: var(--sm-brand-300); }
+  .filter-pill.active {
+    background: var(--sm-brand-600);
+    color: var(--sm-text-inverse);
+    border-color: var(--sm-brand-600);
+  }
+  .sort-select {
+    font: inherit;
+    font-size: var(--sm-text-sm);
+    padding: var(--sm-space-1) var(--sm-space-3);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-surface-card);
+    color: var(--sm-text-primary);
+    cursor: pointer;
+  }
+
+  /* --- Result card (item row) --- */
+  .result-card {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-4);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-lg);
+    margin-bottom: var(--sm-space-3);
+    background: var(--sm-surface-card);
+    cursor: pointer;
+    transition: box-shadow var(--sm-transition-fast), border-color var(--sm-transition-fast);
+    text-decoration: none;
+    color: inherit;
+  }
+  .result-card:hover {
+    border-color: var(--sm-brand-300);
+    box-shadow: var(--sm-shadow-sm);
+  }
+  .result-card.selected {
+    border-color: var(--sm-brand-500);
+    background: var(--sm-brand-50);
+  }
+  .result-card .rc-thumb {
+    width: 72px; height: 54px;
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-neutral-200);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    overflow: hidden;
+  }
+  .result-card .rc-thumb img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  .result-card .rc-body { flex: 1; min-width: 0; }
+  .result-card .rc-name {
+    font-size: var(--sm-text-base);
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-2);
+  }
+  .result-card .rc-meta {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+    display: flex;
+    gap: var(--sm-space-3);
+    flex-wrap: wrap;
+  }
+  .result-card .rc-meta span { white-space: nowrap; }
+  .result-card .rc-actions {
+    display: flex;
+    gap: var(--sm-space-2);
+    flex-shrink: 0;
+  }
+
+  /* --- Status dot --- */
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .status-dot.new { background: var(--sm-success-500); }
+  .status-dot.matched { background: var(--sm-brand-500); }
+  .status-dot.relocated { background: var(--sm-warning-400); }
+  .status-dot.missing { background: var(--sm-danger-500); }
+
+  /* --- Status badge (pill) --- */
+  .item-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 2px 8px;
+    border-radius: var(--sm-radius-full);
+  }
+  .item-status.new { background: #dcfce7; color: #166534; }
+  .item-status.matched { background: #dbeafe; color: #1e40af; }
+  .item-status.relocated { background: #fef3c7; color: #92400e; }
+  .item-status.missing { background: #fee2e2; color: #991b1b; }
+  .item-status.needs-review { background: #fef3c7; color: #92400e; }
+
+  /* --- Confidence badge --- */
+  .confidence-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 1px 6px;
+    border-radius: var(--sm-radius-full);
+    border: 1px solid;
+  }
+  .confidence-badge.high { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+  .confidence-badge.medium { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+  .confidence-badge.low { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+
+  /* --- Category chip --- */
+  .category-chip {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 1px 8px;
+    border-radius: var(--sm-radius-full);
+    background: var(--sm-neutral-100);
+    color: var(--sm-text-secondary);
+  }
+
+  /* --- Buttons --- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sm-space-2);
+    font: inherit;
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    padding: var(--sm-space-2) var(--sm-space-6);
+    border-radius: var(--sm-radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    min-height: var(--sm-touch-target);
+    transition: background var(--sm-transition-fast);
+    white-space: nowrap;
+    text-decoration: none;
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--sm-border-focus);
+    outline-offset: 2px;
+  }
+  .btn-primary {
+    background: var(--sm-brand-600);
+    color: var(--sm-text-inverse);
+  }
+  .btn-primary:hover { background: var(--sm-brand-700); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-success {
+    background: var(--sm-success-600);
+    color: var(--sm-text-inverse);
+  }
+  .btn-success:hover { background: var(--sm-success-700); }
+  .btn-outline {
+    background: var(--sm-surface-card);
+    border-color: var(--sm-border-default);
+    color: var(--sm-text-primary);
+  }
+  .btn-outline:hover { background: var(--sm-neutral-50); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--sm-text-secondary);
+    padding: var(--sm-space-1) var(--sm-space-3);
+    min-height: 32px;
+  }
+  .btn-ghost:hover { background: var(--sm-neutral-100); color: var(--sm-text-primary); }
+  .btn-sm {
+    font-size: var(--sm-text-xs);
+    padding: var(--sm-space-1) var(--sm-space-3);
+    min-height: 32px;
+  }
+
+  /* --- Bulk actions bar --- */
+  .bulk-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-3) var(--sm-space-4);
+    background: var(--sm-brand-50);
+    border: 1px solid var(--sm-brand-200);
+    border-radius: var(--sm-radius-lg);
+    margin-bottom: var(--sm-space-4);
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .bulk-bar .selected-count {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+  }
+  .bulk-bar .btn { min-height: 36px; }
+
+  /* --- Empty state --- */
+  .empty-state {
+    text-align: center;
+    padding: var(--sm-space-16) var(--sm-space-4);
+    color: var(--sm-text-tertiary);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: var(--sm-space-4); }
+  .empty-state h3 { font-size: var(--sm-text-lg); color: var(--sm-text-primary); margin-bottom: var(--sm-space-2); }
+  .empty-state p { font-size: var(--sm-text-sm); max-width: 400px; margin: 0 auto var(--sm-space-4); }
+
+  /* --- Keyboard hint --- */
+  .kbd-hint {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+    margin-top: var(--sm-space-6);
+    text-align: center;
+  }
+  .kbd {
+    display: inline-block;
+    padding: 0 4px;
+    border: 1px solid var(--sm-border-default);
+    border-radius: 3px;
+    font-size: 11px;
+    font-family: var(--sm-font-mono);
+    background: var(--sm-neutral-50);
+  }
+
+  @media (max-width: 768px) {
+    .stats-grid { grid-template-columns: repeat(3, 1fr); }
+    .page-header { flex-direction: column; }
+    .page-header h1 { font-size: var(--sm-text-xl); }
+    .result-card { flex-wrap: wrap; padding: var(--sm-space-3); gap: var(--sm-space-3); }
+    .result-card .rc-thumb { width: 56px; height: 42px; }
+    .result-card .rc-actions { width: 100%; justify-content: flex-end; }
+    .toolbar { flex-direction: column; align-items: flex-start; }
+    .header-actions { width: 100%; }
+    .header-actions .btn { flex: 1; }
+  }
+
+  @media (max-width: 640px) {
+    .stats-grid { grid-template-columns: repeat(3, 1fr); gap: var(--sm-space-2); }
+    .stat-card { padding: var(--sm-space-3); }
+    .stat-card .stat-value { font-size: var(--sm-text-xl); }
+    .result-card .rc-name { font-size: var(--sm-text-sm); }
+    .result-card .rc-meta { font-size: var(--sm-text-xs); gap: var(--sm-space-2); }
+    .bulk-bar { flex-direction: column; align-items: stretch; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- ===== Top Nav ===== -->
+  <nav class="top-nav">
+    <a href="#" class="logo">PerifEye</a>
+    <a href="item-search.html" class="nav-link">Items</a>
+    <a href="repair-list.html" class="nav-link">Repairs</a>
+    <a href="#" class="nav-link">Walkthroughs</a>
+    <a href="upload.html" class="nav-link active">Upload</a>
+  </nav>
+
+  <!-- ===== Breadcrumb ===== -->
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="upload.html">Upload</a>
+    <span class="sep">&#8250;</span>
+    <span>Walkthrough A-12 Results</span>
+  </nav>
+
+  <!-- ===== Page Header ===== -->
+  <div class="page-header">
+    <div>
+      <h1>Walkthrough Results</h1>
+      <p class="subtitle">Warehouse A-12 — Apr 29, 2026 at 09:42 &middot; Processed in 1m 48s &middot; 2,016 frames</p>
+    </div>
+    <div class="header-actions">
+      <a href="review.html" class="btn btn-primary">Open in Operator Console</a>
+      <button class="btn btn-outline" id="btn-upload-another">Upload Another</button>
+    </div>
+  </div>
+
+  <!-- ===== Stats Grid ===== -->
+  <!-- Lens: Hick's Law — filterable stat cards reduce the full list to actionable subsets -->
+  <div class="stats-grid" id="stats-grid">
+    <div class="stat-card active" data-filter="all">
+      <div class="stat-value total">47</div>
+      <div class="stat-label">Total Items</div>
+    </div>
+    <div class="stat-card" data-filter="new">
+      <div class="stat-value new">18</div>
+      <div class="stat-label">New</div>
+    </div>
+    <div class="stat-card" data-filter="matched">
+      <div class="stat-value matched">24</div>
+      <div class="stat-label">Matched</div>
+    </div>
+    <div class="stat-card" data-filter="relocated">
+      <div class="stat-value relocated">3</div>
+      <div class="stat-label">Relocated</div>
+    </div>
+    <div class="stat-card" data-filter="missing">
+      <div class="stat-value missing">2</div>
+      <div class="stat-label">Missing</div>
+    </div>
+  </div>
+
+  <!-- ===== Toolbar ===== -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <span class="filter-pill active" data-confidence="all">All Confidence</span>
+      <span class="filter-pill" data-confidence="high">High (≥80%)</span>
+      <span class="filter-pill" data-confidence="medium">Medium (50–79%)</span>
+      <span class="filter-pill" data-confidence="low">Low (&lt;50%)</span>
+    </div>
+    <div class="toolbar-right">
+      <select class="sort-select" id="sort-select" aria-label="Sort items">
+        <option value="confidence">Sort by Confidence</option>
+        <option value="name">Sort by Name</option>
+        <option value="zone">Sort by Zone</option>
+        <option value="status">Sort by Status</option>
+      </select>
+      <span class="results-count" id="results-count" style="font-size:var(--sm-text-sm);color:var(--sm-text-secondary);">47 items</span>
+    </div>
+  </div>
+
+  <!-- ===== Bulk Actions Bar ===== -->
+  <!-- Lens: Progressive Disclosure — bulk bar appears only after selection, not cluttering idle state -->
+  <div class="bulk-bar" id="bulk-bar" style="display:none;">
+    <span class="selected-count" id="selected-count">0 selected</span>
+    <button class="btn btn-success btn-sm" id="btn-bulk-accept">Accept Selected</button>
+    <button class="btn btn-outline btn-sm" id="btn-bulk-review">Mark for Review</button>
+    <button class="btn btn-ghost btn-sm" id="btn-clear-selection">Clear</button>
+  </div>
+
+  <!-- ===== Results List ===== -->
+  <!-- Each card represents an AI-detected item from the walkthrough -->
+  <div id="results-list">
+    <!-- Item 1: New, high confidence -->
+    <a href="item-detail-edit.html" class="result-card" data-status="new" data-confidence="high">
+      <div class="rc-thumb">&#128218;</div>
+      <div class="rc-body">
+        <div class="rc-name">
+          Binder — Blue 3-Ring
+          <span class="item-status new">New</span>
+          <span class="confidence-badge high">96%</span>
+        </div>
+        <div class="rc-meta">
+          <span class="category-chip">Office Supplies</span>
+          <span>Zone 1-A &middot; Shelf C-4</span>
+          <span>Frame 00:03:42</span>
+        </div>
+      </div>
+      <div class="rc-actions">
+        <button class="btn btn-sm btn-success btn-accept" data-action="accept" aria-label="Accept detection">&#10003;</button>
+        <button class="btn btn-sm btn-ghost btn-edit" data-action="edit" aria-label="Edit item">&#9998;</button>
+      </div>
+    </a>
+
+    <!-- Item 2: Matched, high confidence -->
+    <a href="item-detail-edit.html" class="result-card" data-status="matched" data-confidence="high">
+      <div class="rc-thumb">&#129519;</div>
+      <div class="rc-body">
+        <div class="rc-name">
+          Fire Extinguisher #FE-042
+          <span class="item-status matched">Matched</span>
+          <span class="confidence-badge high">94%</span>
+        </div>
+        <div class="rc-meta">
+          <span class="category-chip">Safety Equipment</span>
+          <span>Zone 3-A &middot; Wall Mount East</span>
+          <span>Frame 00:42:18</span>
+        </div>
+      </div>
+      <div class="rc-actions">
+        <button class="btn btn-sm btn-success btn-accept" data-action="accept" aria-label="Accept detection">&#10003;</button>
+        <button class="btn btn-sm btn-ghost btn-edit" data-action="edit" aria-label="Edit item">&#9998;</button>
+      </div>
+    </a>
+
+    <!-- Item 3: New, medium confidence — needs review -->
+    <a href="item-detail-edit.html" class="result-card" data-status="new" data-confidence="medium">
+      <div class="rc-thumb">&#128678;</div>
+      <div class="rc-body">
+        <div class="rc-name">
+          Exit Sign #ES-011
+          <span class="item-status new">New</span>
+          <span class="confidence-badge medium">72%</span>
+        </div>
+        <div class="rc-meta">
+          <span class="category-chip">Signage</span>
+          <span>Zone 2-A &middot; Overhead North</span>
+          <span>Frame 00:28:05</span>
+        </div>
+      </div>
+      <div class="rc-actions">
+        <button class="btn btn-sm btn-success btn-accept" data-action="accept" aria-label="Accept detection">&#10003;</button>
+        <button class="btn btn-sm btn-ghost btn-edit" data-action="edit" aria-label="Edit item">&#9998;</button>
+      </div>
+    </a>
+
+    <!-- Item 4: Matched, high confidence -->
+    <a href="item-detail-edit.html" class="result-card" data-status="matched" data-confidence="high">
+      <div class="rc-thumb">&#128736;</div>
+      <div class="rc-body">
+        <div class="rc-name">
+          Pallet Jack #PJ-002
+          <span class="item-status matched">Matched</span>
+          <span class="confidence-badge high">98%</span>
+        </div>
+        <div class="rc-meta">
+          <span class="category-chip">Equipment</span>
+          <span>Zone 3-B &middot; Loading Dock</span>
+          <span>Frame 00:55:12</span>
+        </div>
+      </div>
+      <div class="rc-actions">
+        <button class="btn btn-sm btn-success btn-accept" data-action="accept" aria-label="Accept detection">&#10003;</button>
+        <button class="btn btn-sm btn-ghost btn-edit" data-action="edit" aria-label="Edit item">&#9998;</button>
+      </div>
+    </a>
+
+    <!-- Item 5: Relocated, medium confidence -->
+    <a href="item-detail-edit.html" class="result-card" data-status="relocated" data-confidence="medium">
+      <div class="rc-thumb">&#128188;</div>
+      <div class="rc-body">
+        <div class="rc-name">
+          File Cabinet — 4-Drawer #FC-008
+          <span class="item-status relocated">Relocated</span>
+          <span class="confidence-badge medium">67%</span>
+        </div>
+        <div class="rc-meta">
+          <span class="category-chip">Furniture</span>
+          <span>Zone 1-B &middot; Previously Zone 1-C</span>
+          <span>Frame 00:15:30</span>
+        </div>
+      </div>
+      <div class="rc-actions">
+        <button class="btn btn-sm btn-success btn-accept" data-action="accept" aria-label="Accept detection">&#10003;</button>
+        <button class="btn btn-sm btn-ghost btn-edit" data-action="edit" aria-label="Edit item">&#9998;</button>
+      </div>
+    </a>
+
+    <!-- Item 6: New, low confidence — needs human review -->
+    <a href="item-detail-edit.html" class="result-card" data-status="new" data-confidence="low">
+      <div class="rc-thumb">&#9881;</div>
+      <div class="rc-body">
+        <div class="rc-name">
+          Unknown Metal Object
+          <span class="item-status needs-review">Needs Review</span>
+          <span class="confidence-badge low">41%</span>
+        </div>
+        <div class="rc-meta">
+          <span class="category-chip">Unknown</span>
+          <span>Zone 2-B &middot; Corner Shelf</span>
+          <span>Frame 00:33:19</span>
+        </div>
+      </div>
+      <div class="rc-actions">
+        <button class="btn btn-sm btn-success btn-accept" data-action="accept" aria-label="Accept detection">&#10003;</button>
+        <button class="btn btn-sm btn-ghost btn-edit" data-action="edit" aria-label="Edit item">&#9998;</button>
+      </div>
+    </a>
+
+    <!-- Item 7: Missing (was in previous walkthrough, not found) -->
+    <a href="item-detail-edit.html" class="result-card" data-status="missing" data-confidence="high">
+      <div class="rc-thumb">&#128187;</div>
+      <div class="rc-body">
+        <div class="rc-name">
+          Laptop #LT-015
+          <span class="item-status missing">Missing</span>
+          <span class="confidence-badge high">91%</span>
+        </div>
+        <div class="rc-meta">
+          <span class="category-chip">IT Equipment</span>
+          <span>Last seen Zone 4-A &middot; Not found in this walkthrough</span>
+          <span>Previously confirmed Apr 28</span>
+        </div>
+      </div>
+      <div class="rc-actions">
+        <button class="btn btn-sm btn-success btn-accept" data-action="accept" aria-label="Accept detection">&#10003;</button>
+        <button class="btn btn-sm btn-ghost btn-edit" data-action="edit" aria-label="Edit item">&#9998;</button>
+      </div>
+    </a>
+
+    <!-- Item 8: Matched, high confidence -->
+    <a href="item-detail-edit.html" class="result-card" data-status="matched" data-confidence="high">
+      <div class="rc-thumb">&#128717;</div>
+      <div class="rc-body">
+        <div class="rc-name">
+          First Aid Kit #FA-003
+          <span class="item-status matched">Matched</span>
+          <span class="confidence-badge high">99%</span>
+        </div>
+        <div class="rc-meta">
+          <span class="category-chip">Safety Equipment</span>
+          <span>Zone 3-A &middot; Wall Mount Center</span>
+          <span>Frame 00:44:50</span>
+        </div>
+      </div>
+      <div class="rc-actions">
+        <button class="btn btn-sm btn-success btn-accept" data-action="accept" aria-label="Accept detection">&#10003;</button>
+        <button class="btn btn-sm btn-ghost btn-edit" data-action="edit" aria-label="Edit item">&#9998;</button>
+      </div>
+    </a>
+  </div>
+
+  <!-- ===== Keyboard Hints ===== -->
+  <p class="kbd-hint">
+    <span class="kbd">j</span> / <span class="kbd">k</span> navigate &middot;
+    <span class="kbd">Enter</span> open detail &middot;
+    <span class="kbd">a</span> accept &middot;
+    <span class="kbd">e</span> edit &middot;
+    <span class="kbd">Shift+A</span> accept all high-confidence
+  </p>
+</div>
+
+<script>
+  // --- State ---
+  var activeFilter = 'all';
+  var activeConfidence = 'all';
+  var selectedItems = new Set();
+  var focusedIdx = -1;
+
+  // --- Stat card filtering ---
+  document.getElementById('stats-grid').addEventListener('click', function(e) {
+    var card = e.target.closest('.stat-card');
+    if (!card) return;
+    document.querySelectorAll('.stat-card').forEach(function(c) { c.classList.remove('active'); });
+    card.classList.add('active');
+    activeFilter = card.dataset.filter;
+    applyFilters();
+  });
+
+  // --- Confidence pill filtering ---
+  document.querySelectorAll('.filter-pill').forEach(function(pill) {
+    pill.addEventListener('click', function(e) {
+      e.stopPropagation();
+      document.querySelectorAll('.filter-pill').forEach(function(p) { p.classList.remove('active'); });
+      pill.classList.add('active');
+      activeConfidence = pill.dataset.confidence;
+      applyFilters();
+    });
+  });
+
+  function applyFilters() {
+    var cards = document.querySelectorAll('#results-list .result-card');
+    var visible = 0;
+    cards.forEach(function(card) {
+      var status = card.dataset.status;
+      var conf = card.dataset.confidence;
+      var show = (activeFilter === 'all' || status === activeFilter) &&
+                 (activeConfidence === 'all' || conf === activeConfidence);
+      card.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    document.getElementById('results-count').textContent = visible + ' items';
+  }
+
+  // --- Item selection ---
+  document.getElementById('results-list').addEventListener('click', function(e) {
+    // Don't intercept button clicks on the card
+    if (e.target.closest('button')) return;
+
+    var card = e.target.closest('.result-card');
+    if (!card) return;
+
+    // Toggle selection with click on card body
+    if (e.shiftKey || e.metaKey) {
+      e.preventDefault();
+      toggleSelect(card);
+    }
+  });
+
+  // --- Action buttons on cards ---
+  document.getElementById('results-list').addEventListener('click', function(e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    var card = btn.closest('.result-card');
+    var action = btn.dataset.action;
+
+    if (action === 'accept') {
+      // Visual feedback: briefly highlight green then fade
+      card.style.transition = 'background 300ms ease';
+      card.style.background = '#dcfce7';
+      setTimeout(function() { card.style.background = ''; }, 600);
+    }
+  });
+
+  function toggleSelect(card) {
+    var id = card.querySelector('.rc-name').textContent.trim();
+    if (selectedItems.has(id)) {
+      selectedItems.delete(id);
+      card.classList.remove('selected');
+    } else {
+      selectedItems.add(id);
+      card.classList.add('selected');
+    }
+    updateBulkBar();
+  }
+
+  function updateBulkBar() {
+    var bar = document.getElementById('bulk-bar');
+    var count = selectedItems.size;
+    if (count > 0) {
+      bar.style.display = 'flex';
+      document.getElementById('selected-count').textContent = count + ' selected';
+    } else {
+      bar.style.display = 'none';
+    }
+  }
+
+  // --- Bulk actions ---
+  document.getElementById('btn-clear-selection').addEventListener('click', function() {
+    selectedItems.clear();
+    document.querySelectorAll('.result-card.selected').forEach(function(c) { c.classList.remove('selected'); });
+    updateBulkBar();
+  });
+
+  document.getElementById('btn-bulk-accept').addEventListener('click', function() {
+    document.querySelectorAll('.result-card.selected').forEach(function(card) {
+      card.style.transition = 'background 300ms ease';
+      card.style.background = '#dcfce7';
+      setTimeout(function() { card.style.background = ''; }, 600);
+    });
+    selectedItems.clear();
+    updateBulkBar();
+  });
+
+  // --- Keyboard navigation ---
+  // Lens: Fitts's Law + keyboard efficiency for power users reviewing many items
+  document.addEventListener('keydown', function(e) {
+    var cards = Array.from(document.querySelectorAll('#results-list .result-card'))
+      .filter(function(c) { return c.style.display !== 'none'; });
+
+    if (e.key === 'j' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusedIdx = Math.min(focusedIdx + 1, cards.length - 1);
+      updateFocus(cards);
+    } else if (e.key === 'k' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusedIdx = Math.max(focusedIdx - 1, 0);
+      updateFocus(cards);
+    } else if (e.key === 'Enter' && focusedIdx >= 0) {
+      e.preventDefault();
+      cards[focusedIdx].click();
+    } else if (e.key === 'a' && !e.shiftKey && focusedIdx >= 0) {
+      e.preventDefault();
+      cards[focusedIdx].querySelector('.btn-accept').click();
+    } else if (e.key === 'A' && e.shiftKey) {
+      e.preventDefault();
+      // Accept all high-confidence items
+      cards.forEach(function(card) {
+        if (card.dataset.confidence === 'high') {
+          card.style.transition = 'background 300ms ease';
+          card.style.background = '#dcfce7';
+          setTimeout(function() { card.style.background = ''; }, 600);
+        }
+      });
+    } else if (e.key === 'e' && focusedIdx >= 0) {
+      e.preventDefault();
+      cards[focusedIdx].querySelector('.btn-edit').click();
+    }
+  });
+
+  function updateFocus(cards) {
+    cards.forEach(function(c, i) {
+      if (i === focusedIdx) {
+        c.classList.add('selected');
+        c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } else if (!selectedItems.has(c.querySelector('.rc-name').textContent.trim())) {
+        c.classList.remove('selected');
+      }
+    });
+  }
+
+  // --- Sort ---
+  document.getElementById('sort-select').addEventListener('change', function() {
+    // Prototype: would re-order or re-fetch in real implementation
+    console.log('Sort by:', this.value);
+  });
+
+  // --- Upload another ---
+  document.getElementById('btn-upload-another').addEventListener('click', function() {
+    window.location.href = 'upload.html';
+  });
+</script>
+
+</body>
+</html>

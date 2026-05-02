@@ -42,7 +42,7 @@ const sizeStyles: Record<ButtonSize, React.CSSProperties> = {
   sm: {
     fontSize: "var(--sm-text-xs)",
     padding: "var(--sm-space-1) var(--sm-space-3)",
-    minHeight: 32,
+    minHeight: 44,
   },
   md: {
     fontSize: "var(--sm-text-sm)",

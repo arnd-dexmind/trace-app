@@ -19,6 +19,7 @@ import { analyticsRouter } from "./routes/analytics.js";
 import { sharingRouter } from "./routes/sharing.js";
 import { teamRouter } from "./routes/team.js";
 import { notificationsRouter } from "./routes/notifications.js";
+import { waitlistRouter } from "./routes/waitlist.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = join(__dirname, "..", "client", "dist");
@@ -170,6 +171,7 @@ export function createApp() {
   app.use("/api/share", sharingRouter);
   app.use("/api/team", teamRouter);
   app.use("/api/notifications", notificationsRouter);
+  app.use("/api/waitlist", waitlistRouter);
 
   // Serve React SPA in production
   if (existsSync(CLIENT_DIST)) {

@@ -123,7 +123,7 @@ export function RepairDetail() {
         )}
       </div>
 
-      <div style={infoGrid}>
+      <div className="info-grid-stack" style={infoGrid}>
         <InfoItem label="Status" value={status.label} />
         <InfoItem
           label="Severity"

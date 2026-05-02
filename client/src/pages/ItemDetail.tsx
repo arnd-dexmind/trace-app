@@ -70,7 +70,7 @@ export function ItemDetail() {
       </div>
 
       {/* Info Grid */}
-      <div style={infoGrid}>
+      <div className="info-grid-stack" style={infoGrid}>
         <InfoItem label="Category" value={item.category || "Uncategorized"} />
         <InfoItem label="Status" value="Active" sub={history.length > 0 ? `Tracked since ${new Date(history[history.length - 1].observedAt).toLocaleDateString()}` : "No history"} />
         <InfoItem
@@ -87,7 +87,7 @@ export function ItemDetail() {
           <h2 style={{ fontSize: "var(--sm-text-base)", fontWeight: 600, marginBottom: "var(--sm-space-4)", display: "flex", alignItems: "center", gap: "var(--sm-space-2)" }}>
             &#128205; Current Location
           </h2>
-          <div style={locationGrid}>
+          <div className="location-grid-stack" style={locationGrid}>
             <LocItem label="Zone" value={history[0].zone?.name || "Unknown"} />
             <LocItem label="Position" value={history[0].storageLocation?.name || "N/A"} />
             <LocItem label="Observed" value={new Date(history[0].observedAt).toLocaleDateString()} />

@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Binder — Blue 3-Ring — PerifEye</title>
+<link rel="stylesheet" href="../tokens.css" />
+<style>
+  .app-shell {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 var(--sm-space-4);
+  }
+
+  /* --- Top nav --- */
+  .top-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-4);
+    padding: var(--sm-space-4) 0;
+    border-bottom: 1px solid var(--sm-border-default);
+    margin-bottom: var(--sm-space-6);
+  }
+  .top-nav .logo {
+    font-size: var(--sm-text-lg);
+    font-weight: var(--sm-font-bold);
+    color: var(--sm-text-primary);
+    text-decoration: none;
+  }
+  .top-nav .nav-link {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-secondary);
+    text-decoration: none;
+    padding: var(--sm-space-1) var(--sm-space-2);
+    border-radius: var(--sm-radius-md);
+  }
+  .top-nav .nav-link:hover { color: var(--sm-text-primary); background: var(--sm-neutral-100); }
+  .top-nav .nav-link.active { color: var(--sm-brand-600); }
+
+  /* --- Breadcrumb --- */
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-2);
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+    margin-bottom: var(--sm-space-4);
+    flex-wrap: wrap;
+  }
+  .breadcrumb a { color: var(--sm-text-link); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb .sep { color: var(--sm-text-tertiary); }
+
+  /* --- Action bar (sticky on mobile) --- */
+  .action-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-3);
+    padding: var(--sm-space-4);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-xl);
+    background: var(--sm-surface-card);
+    margin-bottom: var(--sm-space-6);
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .action-bar .ab-status {
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-2);
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+  }
+  .action-bar .ab-spacer { flex: 1; }
+
+  /* --- Keyframe viewer --- */
+  .keyframe-section {
+    margin-bottom: var(--sm-space-6);
+  }
+  .keyframe-viewer {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--sm-radius-xl);
+    background: var(--sm-neutral-200);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 64px;
+  }
+  .keyframe-viewer img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .keyframe-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: var(--sm-space-4) var(--sm-space-6);
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    color: #fff;
+    font-size: var(--sm-text-sm);
+    flex-wrap: wrap;
+    gap: var(--sm-space-2);
+  }
+  .keyframe-nav {
+    display: flex;
+    gap: var(--sm-space-2);
+    position: absolute;
+    top: var(--sm-space-4);
+    right: var(--sm-space-4);
+  }
+
+  /* --- Detail header --- */
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--sm-space-4);
+    margin-bottom: var(--sm-space-6);
+    flex-wrap: wrap;
+  }
+  .detail-header h1 {
+    font-size: var(--sm-text-2xl);
+    font-weight: var(--sm-font-bold);
+    margin-bottom: var(--sm-space-1);
+  }
+  .detail-header .dh-subtitle {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+  }
+
+  /* --- Info grid (2-col desktop, 1-col mobile) --- */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sm-space-4);
+    margin-bottom: var(--sm-space-6);
+    padding: var(--sm-space-6);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-xl);
+    background: var(--sm-surface-card);
+  }
+  .info-item .label {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--sm-space-1);
+  }
+  .info-item .value {
+    font-size: var(--sm-text-base);
+    font-weight: var(--sm-font-medium);
+  }
+  .info-item .value.sub {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-text-secondary);
+    font-weight: var(--sm-font-normal);
+  }
+
+  /* --- Edit mode form fields --- */
+  .form-field {
+    margin-bottom: var(--sm-space-4);
+  }
+  .form-field label {
+    display: block;
+    font-size: var(--sm-text-xs);
+    font-weight: var(--sm-font-medium);
+    color: var(--sm-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--sm-space-1);
+  }
+  .form-field input,
+  .form-field select,
+  .form-field textarea {
+    width: 100%;
+    font: inherit;
+    font-size: var(--sm-text-base);
+    padding: var(--sm-space-2) var(--sm-space-3);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-md);
+    background: var(--sm-surface-card);
+    color: var(--sm-text-primary);
+    min-height: var(--sm-touch-target);
+    transition: border-color var(--sm-transition-fast);
+  }
+  .form-field input:focus,
+  .form-field select:focus,
+  .form-field textarea:focus {
+    outline: none;
+    border-color: var(--sm-border-focus);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+  .form-field textarea { min-height: 80px; resize: vertical; }
+  .form-field .hint {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+    margin-top: var(--sm-space-1);
+  }
+
+  /* --- Suggested labels --- */
+  .suggested-labels {
+    margin-bottom: var(--sm-space-6);
+  }
+  .suggested-labels h3 {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: var(--sm-space-3);
+  }
+  .label-options {
+    display: flex;
+    gap: var(--sm-space-2);
+    flex-wrap: wrap;
+  }
+  .label-option {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sm-space-2);
+    font-size: var(--sm-text-sm);
+    padding: var(--sm-space-2) var(--sm-space-4);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-lg);
+    background: var(--sm-surface-card);
+    cursor: pointer;
+    transition: all var(--sm-transition-fast);
+  }
+  .label-option:hover { border-color: var(--sm-brand-300); }
+  .label-option.selected {
+    border-color: var(--sm-brand-500);
+    background: var(--sm-brand-50);
+    color: var(--sm-brand-700);
+    font-weight: var(--sm-font-medium);
+  }
+  .label-option .lo-confidence {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+  }
+
+  /* --- Edit action bar --- */
+  .edit-actions {
+    display: flex;
+    gap: var(--sm-space-3);
+    justify-content: flex-end;
+    padding-top: var(--sm-space-4);
+    border-top: 1px solid var(--sm-border-default);
+  }
+
+  /* --- Location card --- */
+  .location-card {
+    padding: var(--sm-space-6);
+    border: 1px solid var(--sm-border-default);
+    border-radius: var(--sm-radius-xl);
+    margin-bottom: var(--sm-space-6);
+    background: var(--sm-surface-card);
+  }
+  .location-card h2 {
+    font-size: var(--sm-text-base);
+    font-weight: var(--sm-font-semibold);
+    margin-bottom: var(--sm-space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-2);
+  }
+  .location-detail {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--sm-space-4);
+  }
+  .location-detail .ld-item .label {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--sm-space-1);
+  }
+  .location-detail .ld-item .value {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+  }
+
+  /* --- Status badges --- */
+  .item-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 2px 8px;
+    border-radius: var(--sm-radius-full);
+  }
+  .item-status.new { background: #dcfce7; color: #166534; }
+  .item-status.needs-review { background: #fef3c7; color: #92400e; }
+  .item-status.accepted { background: #dcfce7; color: #166534; }
+  .item-status.rejected { background: #fee2e2; color: #991b1b; }
+
+  /* --- Confidence badge --- */
+  .confidence-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 1px 8px;
+    border-radius: var(--sm-radius-full);
+    border: 1px solid;
+  }
+  .confidence-badge.high { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+  .confidence-badge.medium { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+  .confidence-badge.low { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+
+  /* --- Category chip --- */
+  .category-chip {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: var(--sm-font-medium);
+    padding: 1px 8px;
+    border-radius: var(--sm-radius-full);
+    background: var(--sm-neutral-100);
+    color: var(--sm-text-secondary);
+  }
+
+  /* --- Buttons --- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sm-space-2);
+    font: inherit;
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    padding: var(--sm-space-2) var(--sm-space-6);
+    border-radius: var(--sm-radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    min-height: var(--sm-touch-target);
+    transition: background var(--sm-transition-fast);
+    white-space: nowrap;
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--sm-border-focus);
+    outline-offset: 2px;
+  }
+  .btn-primary {
+    background: var(--sm-brand-600);
+    color: var(--sm-text-inverse);
+  }
+  .btn-primary:hover { background: var(--sm-brand-700); }
+  .btn-success {
+    background: var(--sm-success-600);
+    color: var(--sm-text-inverse);
+  }
+  .btn-success:hover { background: var(--sm-success-700); }
+  .btn-danger {
+    background: var(--sm-danger-600);
+    color: var(--sm-text-inverse);
+  }
+  .btn-danger:hover { background: var(--sm-danger-700); }
+  .btn-outline {
+    background: var(--sm-surface-card);
+    border-color: var(--sm-border-default);
+    color: var(--sm-text-primary);
+  }
+  .btn-outline:hover { background: var(--sm-neutral-50); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--sm-text-secondary);
+    padding: var(--sm-space-1) var(--sm-space-3);
+    min-height: 32px;
+  }
+  .btn-ghost:hover { background: var(--sm-neutral-100); color: var(--sm-text-primary); }
+  .btn-sm {
+    font-size: var(--sm-text-xs);
+    padding: var(--sm-space-1) var(--sm-space-3);
+    min-height: 32px;
+  }
+  .btn-icon {
+    width: var(--sm-touch-target);
+    height: var(--sm-touch-target);
+    padding: 0;
+    border-radius: var(--sm-radius-md);
+  }
+
+  /* --- AI explanation callout --- */
+  .ai-callout {
+    padding: var(--sm-space-4);
+    border-radius: var(--sm-radius-lg);
+    background: var(--sm-brand-50);
+    border: 1px solid var(--sm-brand-200);
+    margin-bottom: var(--sm-space-6);
+  }
+  .ai-callout .ai-header {
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-semibold);
+    color: var(--sm-brand-700);
+    margin-bottom: var(--sm-space-1);
+    display: flex;
+    align-items: center;
+    gap: var(--sm-space-2);
+  }
+  .ai-callout .ai-body {
+    font-size: var(--sm-text-sm);
+    color: var(--sm-brand-800);
+  }
+
+  /* --- Toast --- */
+  .toast {
+    position: fixed;
+    bottom: var(--sm-space-6);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--sm-neutral-900);
+    color: var(--sm-text-inverse);
+    padding: var(--sm-space-3) var(--sm-space-6);
+    border-radius: var(--sm-radius-lg);
+    font-size: var(--sm-text-sm);
+    font-weight: var(--sm-font-medium);
+    box-shadow: var(--sm-shadow-lg);
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 200ms ease;
+    pointer-events: none;
+  }
+  .toast.visible { opacity: 1; }
+
+  /* --- Nav: prev/next item --- */
+  .item-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: var(--sm-space-8);
+    padding-top: var(--sm-space-6);
+    border-top: 1px solid var(--sm-border-default);
+  }
+  .item-nav .nav-hint {
+    font-size: var(--sm-text-xs);
+    color: var(--sm-text-tertiary);
+  }
+
+  @media (max-width: 768px) {
+    .info-grid { grid-template-columns: 1fr; padding: var(--sm-space-4); }
+    .location-detail { grid-template-columns: 1fr; }
+    .detail-header h1 { font-size: var(--sm-text-xl); }
+    .action-bar { flex-direction: column; align-items: stretch; position: static; }
+    .action-bar .ab-spacer { display: none; }
+    .keyframe-viewer { aspect-ratio: 4 / 3; }
+    .edit-actions { flex-direction: column; }
+    .edit-actions .btn { width: 100%; }
+  }
+
+  @media (max-width: 640px) {
+    .top-nav { flex-wrap: wrap; }
+    .breadcrumb { font-size: var(--sm-text-xs); }
+    .detail-header h1 { font-size: var(--sm-text-lg); }
+    .label-options { flex-direction: column; }
+    .label-option { justify-content: space-between; }
+    .item-nav { flex-direction: column; gap: var(--sm-space-3); text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- ===== Top Nav ===== -->
+  <nav class="top-nav">
+    <a href="#" class="logo">PerifEye</a>
+    <a href="item-search.html" class="nav-link">Items</a>
+    <a href="repair-list.html" class="nav-link">Repairs</a>
+    <a href="#" class="nav-link">Walkthroughs</a>
+    <a href="upload.html" class="nav-link active">Upload</a>
+  </nav>
+
+  <!-- ===== Breadcrumb ===== -->
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <a href="upload.html">Upload</a>
+    <span class="sep">&#8250;</span>
+    <a href="results.html">Walkthrough A-12 Results</a>
+    <span class="sep">&#8250;</span>
+    <span>Binder — Blue 3-Ring</span>
+  </nav>
+
+  <!-- ===== Action Bar ===== -->
+  <!-- Lens: Serial Position Effect — primary accept action first, destructive reject last -->
+  <!-- Lens: Forgiveness — reject requires explicit confirmation before applying -->
+  <div class="action-bar" id="action-bar">
+    <div class="ab-status">
+      <span class="item-status needs-review" id="status-badge">Needs Review</span>
+      <span class="confidence-badge medium" id="confidence-badge">72%</span>
+    </div>
+    <div class="ab-spacer"></div>
+    <button class="btn btn-success" id="btn-accept" aria-label="Accept this detection">
+      &#10003; Accept
+    </button>
+    <button class="btn btn-outline" id="btn-edit-toggle" aria-label="Edit item details">
+      &#9998; Edit
+    </button>
+    <button class="btn btn-danger" id="btn-reject" aria-label="Reject this detection">
+      &#10007; Reject
+    </button>
+  </div>
+
+  <!-- ===== Keyframe Viewer ===== -->
+  <!-- Lens: Recognition over Recall — show the actual frame so user can verify AI detection -->
+  <div class="keyframe-section">
+    <div class="keyframe-viewer" id="keyframe">
+      &#128218;
+      <div class="keyframe-nav">
+        <button class="btn btn-sm btn-ghost" style="color:#fff;background:rgba(0,0,0,0.4);" aria-label="Previous frame">&larr; Prev Frame</button>
+        <button class="btn btn-sm btn-ghost" style="color:#fff;background:rgba(0,0,0,0.4);" aria-label="Next frame">Next Frame &rarr;</button>
+      </div>
+      <div class="keyframe-overlay">
+        <span>Frame 00:03:42 / 2,016</span>
+        <span>Zone 1-A &middot; Shelf C-4</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Detail Header ===== -->
+  <div class="detail-header">
+    <div>
+      <h1 id="item-name-display">Binder — Blue 3-Ring</h1>
+      <p class="dh-subtitle">
+        ID: item_a12_0042 &middot;
+        <span class="category-chip">Office Supplies</span>
+        &middot; Detected Apr 29, 2026 09:42
+      </p>
+    </div>
+  </div>
+
+  <!-- ===== AI Explanation ===== -->
+  <!-- Lens: Trust signals — explaining AI reasoning builds user confidence and helps calibrate trust -->
+  <div class="ai-callout" id="ai-callout">
+    <div class="ai-header">&#9889; AI Detection Summary</div>
+    <div class="ai-body">
+      Detected as "Binder — Blue 3-Ring" with moderate confidence (72%).
+      Primary visual cues: rectangular shape, blue spine, 3-ring mechanism visible, office supply context (surrounded by folders and desk items).
+      <strong>Recommendation:</strong> Review and confirm. Similar items in this zone include "Folder — Manila #F-012" and "Notebook — Spiral #NB-007".
+    </div>
+  </div>
+
+  <!-- ===== View Mode: Info Grid ===== -->
+  <div id="view-mode">
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="label">Category</div>
+        <div class="value">Office Supplies</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Status</div>
+        <div class="value">New detection</div>
+        <div class="value sub">Not previously catalogued in this space</div>
+      </div>
+      <div class="info-item">
+        <div class="label">AI Confidence</div>
+        <div class="value">72% &middot; Medium</div>
+        <div class="value sub">Category: 88% &middot; Identity: 64% &middot; Location: 73%</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Detected At</div>
+        <div class="value">Apr 29, 2026 09:42</div>
+        <div class="value sub">Walkthrough A-12 &middot; Frame 00:03:42</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Zone</div>
+        <div class="value">Zone 1-A</div>
+      </div>
+      <div class="info-item">
+        <div class="label">Position</div>
+        <div class="value">Shelf C-4</div>
+      </div>
+      <div class="info-item" style="grid-column: 1 / -1;">
+        <div class="label">Notes</div>
+        <div class="value sub">No operator notes yet. AI suggests this is a new office supply item not present in the previous walkthrough.</div>
+      </div>
+    </div>
+
+    <!-- ===== Location Card ===== -->
+    <div class="location-card">
+      <h2>&#128205; Detected Location</h2>
+      <div class="location-detail">
+        <div class="ld-item">
+          <div class="label">Zone</div>
+          <div class="value">Zone 1-A</div>
+        </div>
+        <div class="ld-item">
+          <div class="label">Position</div>
+          <div class="value">Shelf C-4</div>
+        </div>
+        <div class="ld-item">
+          <div class="label">Storage Path</div>
+          <div class="value">A / 1 / Shelf-C-4</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Edit Mode ===== -->
+  <!-- Lens: Progressive Disclosure — edit mode hidden until user explicitly opts in -->
+  <!-- Lens: Recognition over Recall — suggested labels offered instead of requiring free-text recall -->
+  <div id="edit-mode" style="display:none;">
+    <!-- Suggested AI labels -->
+    <div class="suggested-labels">
+      <h3>Suggested Labels (click to select)</h3>
+      <div class="label-options" id="label-options">
+        <div class="label-option selected" data-label="Binder — Blue 3-Ring">
+          <span>Binder — Blue 3-Ring</span>
+          <span class="lo-confidence">72%</span>
+        </div>
+        <div class="label-option" data-label="Ring Binder — 3-Ring">
+          <span>Ring Binder — 3-Ring</span>
+          <span class="lo-confidence">58%</span>
+        </div>
+        <div class="label-option" data-label="Document Binder — Blue">
+          <span>Document Binder — Blue</span>
+          <span class="lo-confidence">45%</span>
+        </div>
+        <div class="label-option" data-label="Folder — Plastic Sleeve">
+          <span>Folder — Plastic Sleeve</span>
+          <span class="lo-confidence">31%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Editable fields -->
+    <div class="info-grid">
+      <div class="form-field">
+        <label for="edit-name">Item Name</label>
+        <input type="text" id="edit-name" value="Binder — Blue 3-Ring" />
+        <div class="hint">Use a descriptive, searchable name</div>
+      </div>
+      <div class="form-field">
+        <label for="edit-category">Category</label>
+        <select id="edit-category">
+          <option>Office Supplies</option>
+          <option>Safety Equipment</option>
+          <option>Signage</option>
+          <option>Equipment</option>
+          <option>Furniture</option>
+          <option>IT Equipment</option>
+          <option>Cleaning Supplies</option>
+          <option>Raw Materials</option>
+          <option>Packaging</option>
+          <option>Unknown</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="edit-zone">Zone</label>
+        <select id="edit-zone">
+          <option>Zone 1-A</option>
+          <option>Zone 1-B</option>
+          <option>Zone 1-C</option>
+          <option>Zone 2-A</option>
+          <option>Zone 2-B</option>
+          <option>Zone 3-A</option>
+          <option>Zone 3-B</option>
+          <option>Zone 4-A</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="edit-position">Position / Location Detail</label>
+        <input type="text" id="edit-position" value="Shelf C-4" />
+      </div>
+      <div class="form-field" style="grid-column: 1 / -1;">
+        <label for="edit-notes">Operator Notes</label>
+        <textarea id="edit-notes" placeholder="Add any notes about this item..."></textarea>
+      </div>
+    </div>
+
+    <div class="edit-actions">
+      <button class="btn btn-ghost" id="btn-cancel-edit">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-edit">Save Changes</button>
+    </div>
+  </div>
+
+  <!-- ===== Item Navigation (prev/next in results) ===== -->
+  <div class="item-nav">
+    <a href="#" class="btn btn-outline btn-sm">&larr; Previous Item</a>
+    <span class="nav-hint">Item 4 of 47 in this walkthrough</span>
+    <a href="#" class="btn btn-outline btn-sm">Next Item &rarr;</a>
+  </div>
+</div>
+
+<!-- ===== Toast ===== -->
+<div class="toast" id="toast"></div>
+
+<script>
+  // --- State ---
+  var isEditing = false;
+  var itemState = 'needs-review'; // needs-review | accepted | rejected
+
+  // --- Edit mode toggle ---
+  document.getElementById('btn-edit-toggle').addEventListener('click', function() {
+    isEditing = !isEditing;
+    document.getElementById('view-mode').style.display = isEditing ? 'none' : '';
+    document.getElementById('edit-mode').style.display = isEditing ? '' : 'none';
+    document.getElementById('ai-callout').style.display = isEditing ? 'none' : '';
+    this.textContent = isEditing ? '✕ Close Editor' : '✎ Edit';
+    if (isEditing) {
+      this.classList.remove('btn-outline');
+      this.classList.add('btn-primary');
+    } else {
+      this.classList.remove('btn-primary');
+      this.classList.add('btn-outline');
+    }
+  });
+
+  // --- Suggested label selection ---
+  // Lens: Recognition over Recall — selecting beats typing for mobile users
+  document.getElementById('label-options').addEventListener('click', function(e) {
+    var option = e.target.closest('.label-option');
+    if (!option) return;
+    document.querySelectorAll('.label-option').forEach(function(o) { o.classList.remove('selected'); });
+    option.classList.add('selected');
+    document.getElementById('edit-name').value = option.dataset.label;
+  });
+
+  // --- Cancel edit ---
+  document.getElementById('btn-cancel-edit').addEventListener('click', function() {
+    document.getElementById('btn-edit-toggle').click(); // toggle back to view
+  });
+
+  // --- Save edit ---
+  document.getElementById('btn-save-edit').addEventListener('click', function() {
+    var newName = document.getElementById('edit-name').value;
+    document.getElementById('item-name-display').textContent = newName;
+    document.getElementById('btn-edit-toggle').click(); // toggle back to view
+    showToast('Changes saved');
+  });
+
+  // --- Accept ---
+  document.getElementById('btn-accept').addEventListener('click', function() {
+    itemState = 'accepted';
+    updateStatusBadge();
+    document.getElementById('btn-accept').style.display = 'none';
+    showToast('Item accepted. Added to inventory.');
+  });
+
+  // --- Reject ---
+  // Lens: Forgiveness — confirmed via browser confirm() for prototype; real impl uses modal
+  document.getElementById('btn-reject').addEventListener('click', function() {
+    var confirmed = confirm('Reject this detection? The item will be excluded from this walkthrough\'s results. This can be undone from the walkthrough review page.');
+    if (!confirmed) return;
+    itemState = 'rejected';
+    updateStatusBadge();
+    document.getElementById('btn-accept').style.display = 'none';
+    document.getElementById('btn-reject').style.display = 'none';
+    document.getElementById('btn-edit-toggle').style.display = 'none';
+    showToast('Item rejected.');
+  });
+
+  function updateStatusBadge() {
+    var badge = document.getElementById('status-badge');
+    badge.className = 'item-status ' + itemState;
+    var labels = { 'accepted': 'Accepted', 'rejected': 'Rejected', 'needs-review': 'Needs Review' };
+    badge.textContent = labels[itemState];
+  }
+
+  // --- Toast ---
+  function showToast(message) {
+    var toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.classList.add('visible');
+    clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(function() { toast.classList.remove('visible'); }, 2500);
+  }
+
+  // --- Keyboard shortcuts ---
+  // Lens: power-user efficiency for operators reviewing many items
+  document.addEventListener('keydown', function(e) {
+    if (isEditing) return; // Don't intercept during edit
+    if (e.key === 'a' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      document.getElementById('btn-accept').click();
+    } else if (e.key === 'e' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      document.getElementById('btn-edit-toggle').click();
+    } else if (e.key === 'r' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      document.getElementById('btn-reject').click();
+    } else if (e.key === 'ArrowRight' && !e.shiftKey) {
+      e.preventDefault();
+      // Navigate to next item
+    } else if (e.key === 'ArrowLeft' && !e.shiftKey) {
+      e.preventDefault();
+      // Navigate to previous item
+    } else if (e.key === 'Escape' && isEditing) {
+      e.preventDefault();
+      document.getElementById('btn-cancel-edit').click();
+    }
+  });
+</script>
+
+</body>
+</html>

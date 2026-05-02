@@ -5,6 +5,7 @@ import { buildSceneBundles, pickRepresentativeFrames } from "./scene-segmenter.j
 import { runMultimodalExtraction } from "./multimodal-extractor.js";
 import { matchObservationsToInventoryWithMetrics, matchRepairsToIssues } from "./entity-matcher.js";
 import { generateWalkthroughDiff, applyAutoItems } from "./diff-generator.js";
+import { sendEmail, notificationTemplate, getUserEmail } from "../email/send.js";
 
 export async function processNextJob(
   db: PrismaClient,
@@ -354,7 +355,9 @@ async function finalizePipeline(
     db.itemObservation.count({ where: { walkthroughId } }),
   ]);
 
-  if (totalCount > 0 && pendingCount === 0) {
+  const autoApplied = totalCount > 0 && pendingCount === 0;
+
+  if (autoApplied) {
     await db.reviewTask.updateMany({
       where: { walkthroughId, status: "pending" },
       data: { status: "completed" },
@@ -363,21 +366,79 @@ async function finalizePipeline(
       where: { id: walkthroughId },
       data: { status: "applied", completedAt: new Date() },
     });
-    return;
+  } else {
+    await db.reviewTask.upsert({
+      where: { walkthroughId },
+      create: {
+        walkthroughId,
+        tenantId,
+        status: "pending",
+      },
+      update: { status: "pending" },
+    });
+
+    await db.walkthrough.update({
+      where: { id: walkthroughId },
+      data: { status: "awaiting_review" },
+    });
   }
 
-  await db.reviewTask.upsert({
-    where: { walkthroughId },
-    create: {
-      walkthroughId,
-      tenantId,
-      status: "pending",
-    },
-    update: { status: "pending" },
-  });
+  // Send completion notification emails (best-effort, non-blocking)
+  notifyWalkthroughComplete(db, walkthroughId, tenantId, autoApplied);
+}
 
-  await db.walkthrough.update({
-    where: { id: walkthroughId },
-    data: { status: "awaiting_review" },
-  });
+async function notifyWalkthroughComplete(
+  db: PrismaClient,
+  walkthroughId: string,
+  tenantId: string,
+  autoApplied: boolean,
+) {
+  try {
+    const wt = await db.walkthrough.findUnique({
+      where: { id: walkthroughId },
+      select: { spaceId: true },
+    });
+    if (!wt) return;
+
+    const space = await db.space.findUnique({
+      where: { id: wt.spaceId },
+      select: { name: true },
+    });
+    const spaceName = space?.name ?? "your space";
+
+    const userTenants = await db.userTenant.findMany({
+      where: { tenantId },
+      select: { userId: true },
+    });
+
+    const users = await db.user.findMany({
+      where: { id: { in: userTenants.map((ut) => ut.userId) } },
+      select: { clerkId: true },
+    });
+
+    const headline = autoApplied
+      ? "Walkthrough processing complete"
+      : "Walkthrough ready for review";
+
+    const body = autoApplied
+      ? `Your walkthrough in "${spaceName}" has been processed and all changes have been applied.`
+      : `Your walkthrough in "${spaceName}" has been processed and is ready for your review.`;
+
+    for (const user of users) {
+      const email = await getUserEmail(user.clerkId);
+      if (email) {
+        sendEmail({
+          to: email,
+          subject: headline,
+          html: notificationTemplate({
+            headline,
+            body,
+            // No action URL yet — walkthrough detail page not built on frontend
+          }),
+        });
+      }
+    }
+  } catch {
+    // Best-effort: don't crash the pipeline if notifications fail
+  }
 }
