@@ -10,6 +10,20 @@ datasource db {
 
 // ── Users & Auth ───────────────────────────────────────────────────────────────
 
+model UserOnboarding {
+  id                String   @id @default(cuid())
+  userId            String
+  tenantId          String
+  tourCompleted     Boolean  @default(false)
+  tourCurrentStep   Int      @default(0)
+  tourDismissed     Boolean  @default(false)
+  sampleDataSeeded  Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, tenantId])
+}
+
 model User {
   id        String   @id @default(cuid())
   clerkId   String   @unique

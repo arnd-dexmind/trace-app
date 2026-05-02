@@ -13,6 +13,7 @@ import multer from "multer";
 import { spacesRouter } from "./routes/spaces.js";
 import { reviewRouter } from "./routes/review.js";
 import { processingRouter } from "./routes/processing.js";
+import { onboardingRouter } from "./routes/onboarding.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = join(__dirname, "..", "client", "dist");
@@ -159,13 +160,14 @@ export function createApp() {
   app.use("/api/spaces", spacesRouter);
   app.use("/api/review", reviewRouter);
   app.use("/api/processing", processingRouter);
+  app.use("/api/onboarding", onboardingRouter);
 
   // Serve React SPA in production
   if (existsSync(CLIENT_DIST)) {
     app.use(express.static(CLIENT_DIST));
 
     // SPA fallback for client-side routes
-    const spaRoutes = ["/review", "/items", "/repairs", "/upload", "/capture", "/dashboard"];
+    const spaRoutes = ["/review", "/items", "/repairs", "/upload", "/capture", "/dashboard", "/welcome"];
     for (const route of spaRoutes) {
       app.get(route, (_req, res) => {
         res.type("html").send(renderPage());

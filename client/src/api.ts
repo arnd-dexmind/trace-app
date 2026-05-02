@@ -537,4 +537,58 @@ export function updateWalkthroughResultItem(
   );
 }
 
+// ── Onboarding ──────────────────────────────────────────────────────────
+
+export interface OnboardingStatus {
+  isFirstRun: boolean;
+  tourCompleted: boolean;
+  tourCurrentStep: number;
+  tourDismissed: boolean;
+  sampleDataSeeded: boolean;
+}
+
+export function getOnboardingStatus() {
+  return request<OnboardingStatus>("/api/onboarding/status");
+}
+
+export function updateTourStep(step: number) {
+  return request<{ tourCurrentStep: number; tourCompleted: boolean; tourDismissed: boolean }>(
+    "/api/onboarding/tour/step",
+    { method: "POST", body: JSON.stringify({ step }) },
+  );
+}
+
+export function completeTour() {
+  return request<{ tourCompleted: boolean; tourCurrentStep: number }>(
+    "/api/onboarding/tour/complete",
+    { method: "POST" },
+  );
+}
+
+export function dismissTour() {
+  return request<{ tourDismissed: boolean }>(
+    "/api/onboarding/tour/dismiss",
+    { method: "POST" },
+  );
+}
+
+export function resetOnboarding() {
+  return request<{ reset: boolean }>(
+    "/api/onboarding/reset",
+    { method: "POST" },
+  );
+}
+
+export interface SeedResult {
+  seeded: boolean;
+  spaceId: string;
+  spaceName: string;
+  itemCount: number;
+  repairCount: number;
+}
+
+export function seedSampleData() {
+  return request<SeedResult>("/api/onboarding/seed", { method: "POST" });
+}
+
 export { getTenantId, getSpaceId };
