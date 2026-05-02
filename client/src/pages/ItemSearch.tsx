@@ -192,6 +192,7 @@ export function ItemSearch() {
               value={sort}
               onChange={(e) => updateParam("sort", e.target.value === "name" ? null : e.target.value)}
               style={selectStyle}
+              aria-label="Sort items"
             >
               {SORT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>

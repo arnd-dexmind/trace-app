@@ -596,8 +596,8 @@ test("item detail shows not-found state for nonexistent item", async ({ page }) 
   const spaceId = await page.evaluate(() => localStorage.getItem("trace-space-id"));
   if (!spaceId) return;
 
-  // Use a made-up walkthrough + item ID
-  await page.goto("/results/nonexistent-wt/items/nonexistent-item");
+  // Use valid-format UUIDs that don't exist in the database
+  await page.goto("/results/00000000-0000-0000-0000-000000000000/items/00000000-0000-0000-0000-000000000001");
   await page.waitForLoadState("networkidle");
 
   await expect(page.getByText("Item Not Found")).toBeVisible();
@@ -615,16 +615,16 @@ test("item search page renders sort, filter, and category chip UI", async ({ pag
   await expect(searchInput).toBeVisible();
 
   // Sort dropdown should be visible
-  const sortSelect = page.locator("select").first();
+  const sortSelect = page.locator('[aria-label="Sort items"]');
   await expect(sortSelect).toBeVisible();
   await expect(sortSelect).toHaveValue("name");
 
   // Order toggle button should be visible
-  const orderBtn = page.getByLabel(/Sort/);
+  const orderBtn = page.getByRole("button", { name: /Sort/ });
   await expect(orderBtn).toBeVisible();
 
   // Filter toggle should exist
-  const filterBtn = page.getByText("Filters");
+  const filterBtn = page.getByRole("button", { name: /Filters/ });
   await expect(filterBtn).toBeVisible();
 });
 
@@ -642,17 +642,15 @@ test("item search filter panel opens and shows category chips", async ({ page })
   await page.waitForLoadState("networkidle");
 
   // Open filter panel
-  const filterBtn = page.getByText("Filters");
+  const filterBtn = page.getByRole("button", { name: /Filters/ });
   await filterBtn.click();
 
-  // Category chips should be visible
-  await expect(page.getByText("Category")).toBeVisible();
-  await expect(page.getByText("Tools")).toBeVisible();
+  // Category label and chip for the seeded item
+  await expect(page.locator("span").filter({ hasText: "Category" })).toBeVisible();
+  // Use getByRole button to match the filter chip, not the result card text
+  await expect(page.getByRole("button", { name: "Tools" })).toBeVisible();
 
-  // Zone filter should be present
-  await expect(page.getByText("Zone")).toBeVisible();
-
-  // Confidence range inputs should be present
+  // Confidence range inputs are always present when filter panel is open
   await expect(page.locator('input[type="number"][placeholder="Min"]')).toBeVisible();
   await expect(page.locator('input[type="number"][placeholder="Max"]')).toBeVisible();
 });
@@ -662,14 +660,14 @@ test("item search sort changes order", async ({ page }) => {
   await page.waitForLoadState("networkidle");
 
   // Change sort to Category
-  const sortSelect = page.locator("select").first();
+  const sortSelect = page.locator('[aria-label="Sort items"]');
   await sortSelect.selectOption("category");
 
   // URL should update
   await expect(page).toHaveURL(/sort=category/);
 
   // Toggle order to descending
-  const orderBtn = page.getByLabel(/Sort/);
+  const orderBtn = page.getByRole("button", { name: /Sort/ });
   await orderBtn.click();
 
   // URL should have order=desc

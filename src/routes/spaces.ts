@@ -26,6 +26,7 @@ import {
   listZones,
   createStorageLocation,
   listStorageLocations,
+  createItem,
   createMediaAsset,
   getWalkthroughDiff,
   getWalkthroughResults,
@@ -397,6 +398,30 @@ spacesRouter.get("/:id/inventory", async (req, res) => {
     limit,
   });
   respondPaginated(res, result, req);
+});
+
+spacesRouter.post("/:id/inventory", requireUuidParams("id"), async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (!name) {
+    sendApiError(res, 400, "BAD_REQUEST", "name is required");
+    return;
+  }
+
+  const item = await createItem(db, {
+    spaceId: req.params.id,
+    tenantId: res.locals.tenantId,
+    name,
+    category: typeof req.body?.category === "string" ? req.body.category : undefined,
+    description: typeof req.body?.description === "string" ? req.body.description : undefined,
+    quantity: typeof req.body?.quantity === "number" ? req.body.quantity : undefined,
+  });
+  res.status(201).json(item);
 });
 
 spacesRouter.get("/:id/inventory/:itemId", async (req, res) => {
