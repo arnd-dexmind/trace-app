@@ -145,12 +145,13 @@ export async function deleteSpace(
 
 export async function createWalkthrough(
   db: PrismaClient,
-  params: { spaceId: string; tenantId: string; metadata?: Record<string, unknown> },
+  params: { spaceId: string; tenantId: string; name?: string; metadata?: Record<string, unknown> },
 ) {
   const walkthrough = await db.walkthrough.create({
     data: {
       spaceId: params.spaceId,
       tenantId: params.tenantId,
+      name: params.name?.trim() || null,
       status: "uploaded",
       metadata: params.metadata ? JSON.stringify(params.metadata) : null,
     },
@@ -191,6 +192,101 @@ export async function getWalkthrough(
   tenantId: string,
 ) {
   return ensureWalkthrough(db, walkthroughId, tenantId);
+}
+
+export async function listAllWalkthroughs(
+  db: PrismaClient,
+  tenantId: string,
+  params?: { spaceId?: string; cursor?: string; limit?: number },
+): Promise<PaginatedResult<Awaited<ReturnType<typeof db.walkthrough.findMany>>[number] & { itemCount: number; repairCount: number }>> {
+  const where: Record<string, string> = { tenantId };
+  if (params?.spaceId) where.spaceId = params.spaceId;
+
+  const result = await paginate(
+    (take) =>
+      db.walkthrough.findMany({
+        where,
+        orderBy: { uploadedAt: "desc" },
+        take,
+        ...(params?.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+      }),
+    params?.cursor,
+    params?.limit,
+  );
+
+  const counts = await Promise.all(
+    result.data.map((w) =>
+      Promise.all([
+        db.itemObservation.count({ where: { walkthroughId: w.id } }),
+        db.repairObservation.count({ where: { walkthroughId: w.id } }),
+      ]),
+    ),
+  );
+
+  const data = result.data.map((w, i) => ({
+    ...w,
+    itemCount: counts[i][0],
+    repairCount: counts[i][1],
+  }));
+
+  return { data, nextCursor: result.nextCursor };
+}
+
+export async function getWalkthroughDetail(
+  db: PrismaClient,
+  walkthroughId: string,
+  tenantId: string,
+) {
+  const wt = await db.walkthrough.findUnique({
+    where: { id: walkthroughId },
+    include: {
+      space: { select: { id: true, name: true } },
+    },
+  });
+  if (!wt || wt.tenantId !== tenantId) return null;
+
+  const [items, mediaAssets, jobs] = await Promise.all([
+    db.itemObservation.findMany({
+      where: { walkthroughId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        zone: { select: { id: true, name: true } },
+        storageLocation: { select: { id: true, name: true } },
+        item: { select: { id: true, name: true, category: true } },
+      },
+    }),
+    db.mediaAsset.findMany({
+      where: { walkthroughId },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.processingJob.findMany({
+      where: { walkthroughId },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+  ]);
+
+  return { ...wt, items, mediaAssets, jobs };
+}
+
+export async function updateWalkthroughStatus(
+  db: PrismaClient,
+  walkthroughId: string,
+  tenantId: string,
+  status: string,
+) {
+  const wt = await ensureWalkthrough(db, walkthroughId, tenantId);
+  if (!wt) return null;
+
+  const data: Record<string, unknown> = { status };
+  if (status === "completed" || status === "failed") {
+    data.completedAt = new Date();
+  }
+  if (status === "processing") {
+    data.processedAt = new Date();
+  }
+
+  return db.walkthrough.update({ where: { id: walkthroughId }, data });
 }
 
 export async function startProcessing(
@@ -462,28 +558,76 @@ export async function getItem(
     return null;
   }
 
-  const locationHistory = await db.itemLocationHistory.findMany({
+  const [locationHistory, identityLinks, repairIssues, aliases] = await Promise.all([
+    db.itemLocationHistory.findMany({
+      where: { itemId },
+      orderBy: { observedAt: "desc" },
+      take: 50,
+      include: {
+        zone: { select: { id: true, name: true } },
+        storageLocation: { select: { id: true, name: true } },
+      },
+    }),
+    db.itemIdentityLink.findMany({
+      where: { itemId },
+      include: { observation: { select: { id: true, label: true, confidence: true, keyframeUrl: true, walkthroughId: true } } },
+    }),
+    db.repairIssue.findMany({
+      where: { itemId },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+    db.itemAlias.findMany({
+      where: { itemId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, alias: true, source: true },
+    }),
+  ]);
+
+  return { ...item, locationHistory, identityLinks, repairIssues, aliases };
+}
+
+export async function getItemWalkthroughs(
+  db: PrismaClient,
+  itemId: string,
+  tenantId: string,
+) {
+  const item = await db.inventoryItem.findUnique({ where: { id: itemId } });
+  if (!item || item.tenantId !== tenantId) return null;
+
+  const observations = await db.itemObservation.findMany({
     where: { itemId },
-    orderBy: { observedAt: "desc" },
-    take: 50,
+    orderBy: { createdAt: "desc" },
     include: {
+      walkthrough: {
+        select: { id: true, status: true, uploadedAt: true, name: true },
+      },
       zone: { select: { id: true, name: true } },
       storageLocation: { select: { id: true, name: true } },
     },
   });
 
-  const identityLinks = await db.itemIdentityLink.findMany({
-    where: { itemId },
-    include: { observation: { select: { id: true, label: true, confidence: true, keyframeUrl: true } } },
-  });
+  const grouped = new Map<string, {
+    walkthrough: { id: string; status: string; uploadedAt: Date; name: string | null };
+    appearances: { id: string; label: string; confidence: number | null; zoneName: string | null; storageLocationName: string | null; keyframeUrl: string | null }[];
+  }>();
 
-  const repairIssues = await db.repairIssue.findMany({
-    where: { itemId },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
+  for (const obs of observations) {
+    const wt = obs.walkthrough;
+    if (!grouped.has(wt.id)) {
+      grouped.set(wt.id, { walkthrough: wt, appearances: [] });
+    }
+    grouped.get(wt.id)!.appearances.push({
+      id: obs.id,
+      label: obs.label,
+      confidence: obs.confidence,
+      zoneName: obs.zone?.name ?? null,
+      storageLocationName: obs.storageLocation?.name ?? null,
+      keyframeUrl: obs.keyframeUrl,
+    });
+  }
 
-  return { ...item, locationHistory, identityLinks, repairIssues };
+  return Array.from(grouped.values());
 }
 
 export async function createItem(
@@ -1902,6 +2046,10 @@ export async function bulkTagItems(
   removeTags: string[],
   tenantId: string,
 ) {
+  if (itemIds.some((id) => !id || typeof id !== "string")) {
+    throw new Error("itemIds must not contain null or empty entries");
+  }
+
   const items = await db.inventoryItem.findMany({
     where: { id: { in: itemIds }, spaceId, tenantId },
   });
@@ -1937,6 +2085,10 @@ export async function bulkMoveItems(
   zoneId: string,
   tenantId: string,
 ) {
+  if (itemIds.some((id) => !id || typeof id !== "string")) {
+    throw new Error("itemIds must not contain null or empty entries");
+  }
+
   const items = await db.inventoryItem.findMany({
     where: { id: { in: itemIds }, spaceId, tenantId },
   });
@@ -1975,4 +2127,189 @@ export async function bulkDeleteItems(
   await db.inventoryItem.deleteMany({ where: { id: { in: itemIds }, tenantId } });
 
   return { deleted: items.length };
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
+export interface DashboardActivityEvent {
+  id: string;
+  type: "walkthrough_created" | "repair_opened" | "repair_resolved" | "item_added" | "review_completed" | "export_generated";
+  title: string;
+  body: string;
+  occurredAt: string;
+  entityId: string;
+}
+
+export interface DashboardStats {
+  itemCount: number;
+  repairCount: number;
+  openRepairCount: number;
+  walkthroughCount: number;
+  activeWalkthroughCount: number;
+  pendingReviewCount: number;
+  pipeline: {
+    inProgress: number;
+    queued: number;
+    failed: number;
+  };
+  activityFeed: DashboardActivityEvent[];
+  recentWalkthroughs: (Prisma.WalkthroughGetPayload<Record<string, never>> & {
+    itemObsCount: number;
+    repairObsCount: number;
+  })[];
+  space: { id: string; name: string; description: string | null };
+}
+
+export async function getDashboardStats(
+  db: PrismaClient,
+  spaceId: string,
+  tenantId: string,
+): Promise<DashboardStats | null> {
+  const space = await ensureSpace(db, spaceId, tenantId);
+  if (!space) return null;
+
+  const [
+    itemCount,
+    repairCount,
+    openRepairCount,
+    walkthroughCount,
+    activeWalkthroughCount,
+    pendingReviewCount,
+    pipelinePending,
+    pipelineProcessing,
+    pipelineFailed,
+    recentWalkthroughs,
+    recentItems,
+    recentRepairs,
+    recentResolvedRepairs,
+    recentCompletedReviews,
+  ] = await Promise.all([
+    db.inventoryItem.count({ where: { spaceId, tenantId } }),
+    db.repairIssue.count({ where: { spaceId, tenantId } }),
+    db.repairIssue.count({ where: { spaceId, tenantId, status: "open" } }),
+    db.walkthrough.count({ where: { spaceId, tenantId } }),
+    db.walkthrough.count({ where: { spaceId, tenantId, status: "processing" } }),
+    db.reviewTask.count({ where: { tenantId, status: "pending", walkthrough: { spaceId } } }),
+    db.processingJob.count({ where: { tenantId, status: "pending", walkthrough: { spaceId } } }),
+    db.processingJob.count({ where: { tenantId, status: "processing", walkthrough: { spaceId } } }),
+    db.processingJob.count({ where: { tenantId, status: "failed", walkthrough: { spaceId } } }),
+    db.walkthrough.findMany({
+      where: { spaceId, tenantId },
+      orderBy: { uploadedAt: "desc" },
+      take: 5,
+    }),
+    db.inventoryItem.findMany({
+      where: { spaceId, tenantId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { id: true, name: true, createdAt: true },
+    }),
+    db.repairIssue.findMany({
+      where: { spaceId, tenantId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { id: true, title: true, createdAt: true },
+    }),
+    db.repairIssue.findMany({
+      where: { spaceId, tenantId, resolvedAt: { not: null } },
+      orderBy: { resolvedAt: "desc" },
+      take: 10,
+      select: { id: true, title: true, resolvedAt: true },
+    }),
+    db.reviewTask.findMany({
+      where: { tenantId, status: "completed", walkthrough: { spaceId } },
+      orderBy: { updatedAt: "desc" },
+      take: 10,
+      select: { id: true, walkthroughId: true, updatedAt: true, walkthrough: { select: { name: true } } },
+    }),
+  ]);
+
+  // Enrich recent walkthroughs with observation counts
+  const enrichedWalkthroughs = await Promise.all(
+    recentWalkthroughs.map(async (w) => {
+      const [itemObsCount, repairObsCount] = await Promise.all([
+        db.itemObservation.count({ where: { walkthroughId: w.id } }),
+        db.repairObservation.count({ where: { walkthroughId: w.id } }),
+      ]);
+      return { ...w, itemObsCount, repairObsCount };
+    }),
+  );
+
+  // Build activity feed from recent DB events
+  const events: DashboardActivityEvent[] = [];
+
+  for (const w of recentWalkthroughs.slice(0, 5)) {
+    events.push({
+      id: `wt-${w.id}`,
+      type: "walkthrough_created",
+      title: "Walkthrough started",
+      body: w.name || `Walkthrough ${w.id.slice(0, 8)}`,
+      occurredAt: w.createdAt.toISOString(),
+      entityId: w.id,
+    });
+  }
+
+  for (const item of recentItems) {
+    events.push({
+      id: `item-${item.id}`,
+      type: "item_added",
+      title: "Item added to inventory",
+      body: item.name,
+      occurredAt: item.createdAt.toISOString(),
+      entityId: item.id,
+    });
+  }
+
+  for (const r of recentRepairs) {
+    events.push({
+      id: `repair-${r.id}`,
+      type: "repair_opened",
+      title: "Repair issue opened",
+      body: r.title,
+      occurredAt: r.createdAt.toISOString(),
+      entityId: r.id,
+    });
+  }
+
+  for (const r of recentResolvedRepairs) {
+    events.push({
+      id: `repair-resolved-${r.id}`,
+      type: "repair_resolved",
+      title: "Repair resolved",
+      body: r.title,
+      occurredAt: r.resolvedAt!.toISOString(),
+      entityId: r.id,
+    });
+  }
+
+  for (const rt of recentCompletedReviews) {
+    events.push({
+      id: `review-${rt.id}`,
+      type: "review_completed",
+      title: "Review completed",
+      body: rt.walkthrough.name || `Walkthrough ${rt.walkthroughId.slice(0, 8)}`,
+      occurredAt: rt.updatedAt.toISOString(),
+      entityId: rt.id,
+    });
+  }
+
+  events.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+  const activityFeed = events.slice(0, 10);
+
+  return {
+    itemCount,
+    repairCount,
+    openRepairCount,
+    walkthroughCount,
+    activeWalkthroughCount,
+    pendingReviewCount,
+    pipeline: {
+      inProgress: pipelineProcessing,
+      queued: pipelinePending,
+      failed: pipelineFailed,
+    },
+    activityFeed,
+    recentWalkthroughs: enrichedWalkthroughs,
+    space: { id: space.id, name: space.name, description: space.description },
+  };
 }

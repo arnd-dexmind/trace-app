@@ -19,6 +19,7 @@ import {
   startProcessing,
   searchItems,
   getItem,
+  getItemWalkthroughs,
   listRepairs,
   getRepair,
   createRepair,
@@ -41,6 +42,7 @@ import {
   bulkTagItems,
   bulkMoveItems,
   bulkDeleteItems,
+  getDashboardStats,
 } from "../data.js";
 import { processBatch } from "../lib/processing-orchestrator.js";
 
@@ -149,6 +151,17 @@ spacesRouter.delete("/:id", requireUuidParams("id"), async (req, res) => {
   res.status(200).json(result);
 });
 
+// ── Dashboard ──────────────────────────────────────────────────────────────────
+
+spacesRouter.get("/:id/dashboard", async (req, res) => {
+  const stats = await getDashboardStats(db, req.params.id, res.locals.tenantId);
+  if (!stats) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+  res.status(200).json(stats);
+});
+
 // ── Walkthroughs ──────────────────────────────────────────────────────────────
 
 spacesRouter.post("/:id/walkthroughs", requireUuidParams("id"), async (req, res) => {
@@ -159,10 +172,12 @@ spacesRouter.post("/:id/walkthroughs", requireUuidParams("id"), async (req, res)
   }
 
   const metadata = req.body?.metadata ?? undefined;
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : undefined;
 
   const walkthrough = await createWalkthrough(db, {
     spaceId: req.params.id,
     tenantId: res.locals.tenantId,
+    name,
     metadata,
   });
   res.status(201).json(walkthrough);
@@ -516,6 +531,19 @@ spacesRouter.get("/:id/inventory/:itemId", async (req, res) => {
   res.status(200).json(item);
 });
 
+spacesRouter.get("/:id/inventory/:itemId/walkthroughs", async (req, res) => {
+  const appearances = await getItemWalkthroughs(
+    db,
+    req.params.itemId,
+    res.locals.tenantId,
+  );
+  if (!appearances) {
+    sendApiError(res, 404, "NOT_FOUND", "Item not found");
+    return;
+  }
+  res.status(200).json(appearances);
+});
+
 // ── Item Aliases ──────────────────────────────────────────────────────────────
 
 spacesRouter.get("/:id/inventory/:itemId/aliases", async (req, res) => {
@@ -864,6 +892,10 @@ spacesRouter.post("/:id/inventory/bulk/tag", requireUuidParams("id"), async (req
     sendApiError(res, 400, "BAD_REQUEST", "itemIds must be a non-empty array");
     return;
   }
+  if (itemIds.some((id) => id === null || id === undefined || typeof id !== "string" || id.trim() === "")) {
+    sendApiError(res, 400, "BAD_REQUEST", "itemIds must not contain null or empty entries");
+    return;
+  }
   if (!Array.isArray(addTags)) req.body.addTags = [];
   if (!Array.isArray(removeTags)) req.body.removeTags = [];
   if (addTags.length === 0 && removeTags.length === 0) {
@@ -892,6 +924,10 @@ spacesRouter.post("/:id/inventory/bulk/move", requireUuidParams("id"), async (re
     sendApiError(res, 400, "BAD_REQUEST", "itemIds must be a non-empty array");
     return;
   }
+  if (itemIds.some((id) => id === null || id === undefined || typeof id !== "string" || id.trim() === "")) {
+    sendApiError(res, 400, "BAD_REQUEST", "itemIds must not contain null or empty entries");
+    return;
+  }
   if (typeof zoneId !== "string") {
     sendApiError(res, 400, "BAD_REQUEST", "zoneId is required");
     return;
@@ -916,6 +952,10 @@ spacesRouter.post("/:id/inventory/bulk/delete", requireUuidParams("id"), async (
   const { itemIds, confirm } = req.body || {};
   if (!Array.isArray(itemIds) || itemIds.length === 0) {
     sendApiError(res, 400, "BAD_REQUEST", "itemIds must be a non-empty array");
+    return;
+  }
+  if (itemIds.some((id) => id === null || id === undefined || typeof id !== "string" || id.trim() === "")) {
+    sendApiError(res, 400, "BAD_REQUEST", "itemIds must not contain null or empty entries");
     return;
   }
   if (confirm !== "delete") {
