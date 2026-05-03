@@ -186,7 +186,7 @@ app.use("/api/reports", reportsRouter);
     app.use(express.static(CLIENT_DIST));
 
     // SPA fallback for client-side routes
-    const spaRoutes = ["/review", "/items", "/repairs", "/upload", "/capture", "/dashboard", "/welcome", "/analytics", "/team", "/share", "/spaces", "/compare", "/processing", "/results", "/settings"];
+    const spaRoutes = ["/review", "/items", "/repairs", "/upload", "/capture", "/dashboard", "/welcome", "/analytics", "/team", "/share", "/spaces", "/compare", "/processing", "/results", "/settings", "/reports"];
     for (const route of spaRoutes) {
       app.get(route, (_req, res) => {
         res.type("html").send(renderPage());
