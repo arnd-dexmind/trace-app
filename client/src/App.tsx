@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { TopNav } from "./components/TopNav";
+import { BottomNav } from "./components/BottomNav";
 import { GuidedTour } from "./components/GuidedTour";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/ToastProvider";
@@ -103,6 +104,7 @@ export function App() {
               <Route path="/share/:token" element={<Share />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
+            <BottomNav />
           </OnboardingGate>
         </ToastProvider>
       </ErrorBoundary>

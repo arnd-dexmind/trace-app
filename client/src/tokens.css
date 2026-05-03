@@ -301,6 +301,11 @@ select {
     grid-template-columns: 1fr !important;
   }
 
+  /* Hide desktop nav links on mobile */
+  .desktop-nav {
+    display: none !important;
+  }
+
   /* Repair list: hide table, show cards */
   .desktop-table {
     display: none !important;
