@@ -174,18 +174,6 @@ jobs:
           echo "::error::preview/staging branch reset did not complete within 60s"
           exit 1
 
-      - name: Fix Vercel project root directory
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-          curl -fsSL -X PATCH \
-            "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}?teamId=${VERCEL_ORG_ID}" \
-            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d '{"rootDirectory":"."}'
-
       - name: Deploy to Vercel (staging)
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -193,7 +181,10 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         # No --prod: deploys as Preview, auto-aliased to staging.app.perifeye.com
         # (Vercel domain bound to gitBranch=staging in the trace-app project).
-        run: npx vercel@latest deploy --token "$VERCEL_TOKEN" --yes
+        run: |
+          mkdir -p apps
+          ln -sf .. apps/app
+          npx vercel@latest deploy --token "$VERCEL_TOKEN" --yes
 
       - name: Smoke test
         env:
@@ -230,24 +221,15 @@ jobs:
       # Migrations run as part of Vercel's buildCommand against production main
       # Neon branch (Marketplace-injected DATABASE_URL_UNPOOLED).
 
-      - name: Fix Vercel project root directory
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-          curl -fsSL -X PATCH \
-            "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}?teamId=${VERCEL_ORG_ID}" \
-            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d '{"rootDirectory":"."}'
-
       - name: Deploy to Vercel (production)
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: npx vercel@latest deploy --prod --token "$VERCEL_TOKEN" --yes
+        run: |
+          mkdir -p apps
+          ln -sf .. apps/app
+          npx vercel@latest deploy --prod --token "$VERCEL_TOKEN" --yes
 
       - name: Smoke test
         run: |
