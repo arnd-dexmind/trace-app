@@ -616,6 +616,86 @@ export function seedSampleData() {
   return request<SeedResult>("/api/onboarding/seed", { method: "POST" });
 }
 
+// ── Notifications ──────────────────────────────────────────────────────
+
+export interface NotificationItem {
+  id: string;
+  userId: string;
+  tenantId: string;
+  type: string;
+  title: string;
+  body: string | null;
+  actionUrl: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationPreferences {
+  id: string;
+  userId: string;
+  tenantId: string;
+  inApp: boolean;
+  email: boolean;
+  walkthroughComplete: boolean;
+  newIssue: boolean;
+  issueResolved: boolean;
+}
+
+export function listNotifications() {
+  return request<NotificationItem[]>("/api/notifications");
+}
+
+export function markNotificationRead(id: string) {
+  return request<NotificationItem>(`/api/notifications/${id}/read`, { method: "PATCH" });
+}
+
+export function markAllNotificationsRead() {
+  return request<{ markedRead: number }>("/api/notifications/read-all", { method: "PATCH" });
+}
+
+export function getNotificationPreferences() {
+  return request<NotificationPreferences>("/api/notifications/preferences");
+}
+
+export function updateNotificationPreferences(updates: Partial<Pick<NotificationPreferences, "inApp" | "email" | "walkthroughComplete" | "newIssue" | "issueResolved">>) {
+  return request<NotificationPreferences>("/api/notifications/preferences", {
+    method: "PUT",
+    body: JSON.stringify(updates),
+  });
+}
+
+// ── Profile ───────────────────────────────────────────────────────────
+
+export interface UserProfile {
+  id: string;
+  clerkId: string;
+  email: string | null;
+  name: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserSession {
+  id: string;
+  status: string;
+  lastActiveAt: string;
+  createdAt: string;
+  browser: string | null;
+  os: string | null;
+  current: boolean;
+}
+
+export function getProfile() {
+  return request<UserProfile>("/api/settings/profile");
+}
+
+export function updateProfile(data: { name?: string }) {
+  return request<UserProfile>("/api/settings/profile", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
 export { getTenantId, getSpaceId };
 
 // ── Reports / Export ────────────────────────────────────────────────────

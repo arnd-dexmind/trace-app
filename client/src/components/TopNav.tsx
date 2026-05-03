@@ -52,6 +52,7 @@ export function TopNav() {
     { to: "/repairs", label: "Repairs", active: isActive("/repairs") },
     { to: "/analytics", label: "Analytics", active: isActive("/analytics") },
     { to: "/team", label: "Team", active: isActive("/team") },
+    { to: "/settings", label: "Settings", active: isActive("/settings") },
     { to: "/upload", label: "Upload", active: isActive("/upload") },
     { to: "/capture", label: "Capture", active: isActive("/capture") },
   ];

@@ -22,6 +22,7 @@ import { notificationsRouter } from "./routes/notifications.js";
 import { waitlistRouter } from "./routes/waitlist.js";
 import { reportsRouter } from "./routes/reports.js";
 import { comparisonRouter } from "./routes/comparison.js";
+import { settingsRouter } from "./routes/settings.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = join(__dirname, "..", "client", "dist");
@@ -176,13 +177,14 @@ export function createApp() {
   app.use("/api/waitlist", waitlistRouter);
 app.use("/api/reports", reportsRouter);
   app.use("/api/comparison", comparisonRouter);
+  app.use("/api/settings", settingsRouter);
 
   // Serve React SPA in production
   if (existsSync(CLIENT_DIST)) {
     app.use(express.static(CLIENT_DIST));
 
     // SPA fallback for client-side routes
-    const spaRoutes = ["/review", "/items", "/repairs", "/upload", "/capture", "/dashboard", "/welcome", "/analytics", "/team", "/share", "/spaces", "/compare", "/processing", "/results"];
+    const spaRoutes = ["/review", "/items", "/repairs", "/upload", "/capture", "/dashboard", "/welcome", "/analytics", "/team", "/share", "/spaces", "/compare", "/processing", "/results", "/settings"];
     for (const route of spaRoutes) {
       app.get(route, (_req, res) => {
         res.type("html").send(renderPage());

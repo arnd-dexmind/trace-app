@@ -23,6 +23,7 @@ import { Team } from "./pages/Team";
 import { Share } from "./pages/Share";
 import { Welcome } from "./pages/Welcome";
 import { DeltaComparison } from "./pages/DeltaComparison";
+import { Settings } from "./pages/Settings";
 
 function OnboardingGate({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -100,6 +101,7 @@ export function App() {
               <Route path="/team" element={<Team />} />
               <Route path="/compare" element={<DeltaComparison />} />
               <Route path="/share/:token" element={<Share />} />
+              <Route path="/settings" element={<Settings />} />
             </Routes>
           </OnboardingGate>
         </ToastProvider>
