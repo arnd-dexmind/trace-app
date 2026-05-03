@@ -9,7 +9,6 @@ import { db } from "../src/lib/db.js";
  */
 export async function cleanDatabase() {
   const steps: Array<{ label: string; run: () => Promise<unknown> }> = [
-    { label: "itemTag", run: () => db.itemTag.deleteMany() },
     { label: "reviewAction", run: () => db.reviewAction.deleteMany() },
     { label: "itemIdentityLink", run: () => db.itemIdentityLink.deleteMany() },
     { label: "itemLocationHistory", run: () => db.itemLocationHistory.deleteMany() },
@@ -26,7 +25,6 @@ export async function cleanDatabase() {
     { label: "repairIssue", run: () => db.repairIssue.deleteMany() },
     { label: "spaceZone", run: () => db.spaceZone.deleteMany() },
     { label: "inventoryItem", run: () => db.inventoryItem.deleteMany() },
-    { label: "tag", run: () => db.tag.deleteMany() },
     { label: "space", run: () => db.space.deleteMany() },
     { label: "notification", run: () => db.notification.deleteMany() },
     { label: "notificationPreference", run: () => db.notificationPreference.deleteMany() },

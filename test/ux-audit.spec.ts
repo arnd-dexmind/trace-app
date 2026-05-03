@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
+import { AxeBuilder } from "@axe-core/playwright";
 
 const VIEWPORTS = {
   mobile: { width: 375, height: 812 },
@@ -44,8 +44,8 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       });
 
       // Axe a11y scan
-      const results = new AxeBuilder({ page }).analyze();
-      const violations = (await results).violations;
+      const axeResults = await new AxeBuilder({ page }).analyze();
+      const violations = axeResults.violations;
 
       if (violations.length > 0) {
         console.warn(
@@ -59,7 +59,7 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       }
 
       // No critical/serious violations rule
-      const serious = violations.filter((v) =>
+      const serious = violations.filter((v: { impact?: string | null }) =>
         ["critical", "serious"].includes(v.impact ?? "")
       );
       expect(serious.length).toBe(0);

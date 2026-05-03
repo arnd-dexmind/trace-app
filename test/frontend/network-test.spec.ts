@@ -5,7 +5,7 @@ test("log network errors", async ({ page }) => {
   page.on("response", async (r) => {
     if (r.status() >= 400) {
       const body = await r.text().catch(() => "");
-      errors.push(`${r.status()} ${r.method()} ${r.url()}: ${body.substring(0, 200)}`);
+      errors.push(`${r.status()} ${r.request().method()} ${r.url()}: ${body.substring(0, 200)}`);
     }
   });
 
