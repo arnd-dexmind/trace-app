@@ -676,3 +676,45 @@ export function getWalkthroughComparison(baselineId: string, comparisonId: strin
     `/api/comparison/walkthroughs?baseline=${baselineId}&comparison=${comparisonId}`,
   );
 }
+
+// ── Bulk Inventory Operations ──────────────────────────────────────────
+
+export interface BulkTagResult {
+  tagged: number;
+  addTags: string[];
+  removeTags: string[];
+}
+
+export function bulkTagItems(
+  spaceId: string,
+  body: { itemIds: string[]; addTags: string[]; removeTags: string[] },
+) {
+  return request<BulkTagResult>(`/api/spaces/${spaceId}/inventory/bulk/tag`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export interface BulkMoveResult {
+  moved: number;
+  zoneId: string;
+  zoneName: string;
+}
+
+export function bulkMoveItems(spaceId: string, body: { itemIds: string[]; zoneId: string }) {
+  return request<BulkMoveResult>(`/api/spaces/${spaceId}/inventory/bulk/move`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export interface BulkDeleteResult {
+  deleted: number;
+}
+
+export function bulkDeleteItems(spaceId: string, body: { itemIds: string[]; confirm: string }) {
+  return request<BulkDeleteResult>(`/api/spaces/${spaceId}/inventory/bulk/delete`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

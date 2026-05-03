@@ -1891,3 +1891,88 @@ export async function compareWalkthroughs(
     items,
   };
 }
+
+// ── Bulk Inventory Operations ──────────────────────────────────────────────
+
+export async function bulkTagItems(
+  db: PrismaClient,
+  spaceId: string,
+  itemIds: string[],
+  addTags: string[],
+  removeTags: string[],
+  tenantId: string,
+) {
+  const items = await db.inventoryItem.findMany({
+    where: { id: { in: itemIds }, spaceId, tenantId },
+  });
+  if (items.length !== itemIds.length) return null;
+
+  const operations: Promise<unknown>[] = [];
+
+  for (const tag of addTags) {
+    operations.push(
+      db.itemAlias.createMany({
+        data: itemIds.map((itemId) => ({ itemId, tenantId, alias: tag, source: "operator" })),
+        skipDuplicates: true,
+      }),
+    );
+  }
+
+  if (removeTags.length > 0) {
+    operations.push(
+      db.itemAlias.deleteMany({
+        where: { itemId: { in: itemIds }, alias: { in: removeTags }, tenantId },
+      }),
+    );
+  }
+
+  await Promise.all(operations);
+  return { tagged: items.length, addTags, removeTags };
+}
+
+export async function bulkMoveItems(
+  db: PrismaClient,
+  spaceId: string,
+  itemIds: string[],
+  zoneId: string,
+  tenantId: string,
+) {
+  const items = await db.inventoryItem.findMany({
+    where: { id: { in: itemIds }, spaceId, tenantId },
+  });
+  if (items.length !== itemIds.length) return null;
+
+  const zone = await db.spaceZone.findUnique({ where: { id: zoneId } });
+  if (!zone || zone.spaceId !== spaceId) return null;
+
+  await db.itemLocationHistory.createMany({
+    data: itemIds.map((itemId) => ({
+      itemId,
+      tenantId,
+      zoneId,
+      movedAt: new Date(),
+    })),
+  });
+
+  return { moved: items.length, zoneId, zoneName: zone.name };
+}
+
+export async function bulkDeleteItems(
+  db: PrismaClient,
+  spaceId: string,
+  itemIds: string[],
+  tenantId: string,
+) {
+  const items = await db.inventoryItem.findMany({
+    where: { id: { in: itemIds }, spaceId, tenantId },
+  });
+  if (items.length !== itemIds.length) return null;
+
+  await db.itemAlias.deleteMany({ where: { itemId: { in: itemIds }, tenantId } });
+  await db.itemLocationHistory.deleteMany({ where: { itemId: { in: itemIds }, tenantId } });
+  await db.itemIdentityLink.deleteMany({ where: { itemId: { in: itemIds }, tenantId } });
+  await db.repairIssue.updateMany({ where: { itemId: { in: itemIds } }, data: { itemId: null } });
+  await db.inventoryItem.deleteMany({ where: { id: { in: itemIds }, tenantId } });
+
+  return { deleted: items.length };
+}

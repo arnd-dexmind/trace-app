@@ -38,6 +38,9 @@ import {
   listAliases,
   createAlias,
   deleteAlias,
+  bulkTagItems,
+  bulkMoveItems,
+  bulkDeleteItems,
 } from "../data.js";
 import { processBatch } from "../lib/processing-orchestrator.js";
 
@@ -845,4 +848,86 @@ spacesRouter.post("/:id/walkthroughs/:wid/media", requireUuidParams("id", "wid")
         : undefined,
   });
   res.status(201).json(asset);
+});
+
+// ── Bulk Inventory Operations ────────────────────────────────────────────────
+
+spacesRouter.post("/:id/inventory/bulk/tag", requireUuidParams("id"), async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const { itemIds, addTags, removeTags } = req.body || {};
+  if (!Array.isArray(itemIds) || itemIds.length === 0) {
+    sendApiError(res, 400, "BAD_REQUEST", "itemIds must be a non-empty array");
+    return;
+  }
+  if (!Array.isArray(addTags)) req.body.addTags = [];
+  if (!Array.isArray(removeTags)) req.body.removeTags = [];
+  if (addTags.length === 0 && removeTags.length === 0) {
+    sendApiError(res, 400, "BAD_REQUEST", "addTags or removeTags must be provided");
+    return;
+  }
+
+  const result = await bulkTagItems(db, req.params.id, itemIds, addTags || [], removeTags || [], res.locals.tenantId);
+  if (!result) {
+    sendApiError(res, 404, "NOT_FOUND", "Some items not found in this space");
+    return;
+  }
+
+  res.status(200).json(result);
+});
+
+spacesRouter.post("/:id/inventory/bulk/move", requireUuidParams("id"), async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const { itemIds, zoneId } = req.body || {};
+  if (!Array.isArray(itemIds) || itemIds.length === 0) {
+    sendApiError(res, 400, "BAD_REQUEST", "itemIds must be a non-empty array");
+    return;
+  }
+  if (typeof zoneId !== "string") {
+    sendApiError(res, 400, "BAD_REQUEST", "zoneId is required");
+    return;
+  }
+
+  const result = await bulkMoveItems(db, req.params.id, itemIds, zoneId, res.locals.tenantId);
+  if (!result) {
+    sendApiError(res, 404, "NOT_FOUND", "Zone or items not found in this space");
+    return;
+  }
+
+  res.status(200).json(result);
+});
+
+spacesRouter.post("/:id/inventory/bulk/delete", requireUuidParams("id"), async (req, res) => {
+  const space = await getSpace(db, req.params.id, res.locals.tenantId);
+  if (!space) {
+    sendApiError(res, 404, "NOT_FOUND", "Space not found");
+    return;
+  }
+
+  const { itemIds, confirm } = req.body || {};
+  if (!Array.isArray(itemIds) || itemIds.length === 0) {
+    sendApiError(res, 400, "BAD_REQUEST", "itemIds must be a non-empty array");
+    return;
+  }
+  if (confirm !== "delete") {
+    sendApiError(res, 400, "BAD_REQUEST", "Set confirm to \"delete\" to proceed");
+    return;
+  }
+
+  const result = await bulkDeleteItems(db, req.params.id, itemIds, res.locals.tenantId);
+  if (!result) {
+    sendApiError(res, 404, "NOT_FOUND", "Some items not found in this space");
+    return;
+  }
+
+  res.status(200).json(result);
 });
