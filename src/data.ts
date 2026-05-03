@@ -1759,3 +1759,135 @@ export async function createNotification(
 ) {
   return db.notification.create({ data: params });
 }
+
+// ── Walkthrough Comparison ─────────────────────────────────────────────────
+
+export interface WalkthroughComparisonItem {
+  id: string;
+  label: string;
+  zoneName: string | null;
+  storageLocationName: string | null;
+  confidence: number | null;
+  changeType: "added" | "removed" | "changed" | "unchanged";
+  baselineLabel: string | null;
+  comparisonLabel: string | null;
+  baselineZone: string | null;
+  comparisonZone: string | null;
+  baselineLocation: string | null;
+  comparisonLocation: string | null;
+  baselineConfidence: number | null;
+  comparisonConfidence: number | null;
+}
+
+export interface WalkthroughComparison {
+  baseline: { id: string; status: string; uploadedAt: Date };
+  comparison: { id: string; status: string; uploadedAt: Date };
+  summary: {
+    added: number;
+    removed: number;
+    changed: number;
+    unchanged: number;
+  };
+  items: WalkthroughComparisonItem[];
+}
+
+export async function compareWalkthroughs(
+  db: PrismaClient,
+  baselineId: string,
+  comparisonId: string,
+  tenantId: string,
+): Promise<WalkthroughComparison | null> {
+  const [baseline, comparison] = await Promise.all([
+    db.walkthrough.findUnique({ where: { id: baselineId } }),
+    db.walkthrough.findUnique({ where: { id: comparisonId } }),
+  ]);
+
+  if (!baseline || baseline.tenantId !== tenantId) return null;
+  if (!comparison || comparison.tenantId !== tenantId) return null;
+
+  const [baselineObs, comparisonObs] = await Promise.all([
+    db.itemObservation.findMany({
+      where: { walkthroughId: baselineId },
+      include: {
+        zone: { select: { name: true } },
+        storageLocation: { select: { name: true } },
+      },
+      orderBy: { label: "asc" },
+    }),
+    db.itemObservation.findMany({
+      where: { walkthroughId: comparisonId },
+      include: {
+        zone: { select: { name: true } },
+        storageLocation: { select: { name: true } },
+      },
+      orderBy: { label: "asc" },
+    }),
+  ]);
+
+  const baselineMap = new Map(baselineObs.map((o) => [o.label.toLowerCase(), o]));
+  const comparisonMap = new Map(comparisonObs.map((o) => [o.label.toLowerCase(), o]));
+
+  const allLabels = new Set([
+    ...baselineMap.keys(),
+    ...comparisonMap.keys(),
+  ]);
+
+  const items: WalkthroughComparisonItem[] = [];
+  let added = 0;
+  let removed = 0;
+  let changed = 0;
+  let unchanged = 0;
+
+  for (const labelKey of allLabels) {
+    const base = baselineMap.get(labelKey);
+    const comp = comparisonMap.get(labelKey);
+
+    let changeType: WalkthroughComparisonItem["changeType"];
+
+    if (!base && comp) {
+      changeType = "added";
+      added++;
+    } else if (base && !comp) {
+      changeType = "removed";
+      removed++;
+    } else if (base && comp) {
+      const zoneChanged = (base.zone?.name ?? null) !== (comp.zone?.name ?? null);
+      const locChanged = (base.storageLocation?.name ?? null) !== (comp.storageLocation?.name ?? null);
+      const confidenceChanged = base.confidence !== comp.confidence;
+      if (zoneChanged || locChanged || confidenceChanged) {
+        changeType = "changed";
+        changed++;
+      } else {
+        changeType = "unchanged";
+        unchanged++;
+      }
+    } else {
+      continue;
+    }
+
+    const primary = base || comp;
+    items.push({
+      id: primary!.id,
+      label: primary!.label,
+      zoneName: comp?.zone?.name ?? base?.zone?.name ?? null,
+      storageLocationName: comp?.storageLocation?.name ?? base?.storageLocation?.name ?? null,
+      confidence: comp?.confidence ?? base?.confidence ?? null,
+      changeType,
+      baselineLabel: base?.label ?? null,
+      comparisonLabel: comp?.label ?? null,
+      baselineZone: base?.zone?.name ?? null,
+      comparisonZone: comp?.zone?.name ?? null,
+      baselineLocation: base?.storageLocation?.name ?? null,
+      comparisonLocation: comp?.storageLocation?.name ?? null,
+      baselineConfidence: base?.confidence ?? null,
+      comparisonConfidence: comp?.confidence ?? null,
+    });
+  }
+
+  return {
+    baseline: { id: baseline.id, status: baseline.status, uploadedAt: baseline.uploadedAt },
+    comparison: { id: comparison.id, status: comparison.status, uploadedAt: comparison.uploadedAt },
+    summary: { added, removed, changed, unchanged },
+    items,
+  };
+}

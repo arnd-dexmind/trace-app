@@ -12,6 +12,7 @@ import {
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
+import { ExportButton } from "../components/ExportButton";
 
 type FilterStatus = "all" | "open" | "acknowledged" | "in_progress" | "resolved" | "verified";
 type FilterSeverity = "all" | "low" | "medium" | "high";
@@ -173,6 +174,7 @@ export function RepairList() {
           </span>
         </div>
         <div style={{ display: "flex", gap: "var(--sm-space-3)" }}>
+          <ExportButton type="repairs" />
           <select
             style={selectStyle}
             value={sort}

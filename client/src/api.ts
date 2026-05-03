@@ -617,3 +617,62 @@ export function seedSampleData() {
 }
 
 export { getTenantId, getSpaceId };
+
+// ── Reports / Export ────────────────────────────────────────────────────
+
+export async function downloadReport(type: "inventory" | "repairs", format: "pdf" | "csv", spaceId: string) {
+  const res = await fetch(`/api/reports/${type}?spaceId=${encodeURIComponent(spaceId)}&format=${format}`, {
+    headers: { "x-tenant-id": getTenantId() },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error?.message || `Download failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const ext = format === "csv" ? "csv" : "pdf";
+  a.href = url;
+  a.download = `${type}.${ext}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── Walkthrough Comparison ──────────────────────────────────────────────
+
+export interface ComparisonItem {
+  id: string;
+  label: string;
+  zoneName: string | null;
+  storageLocationName: string | null;
+  confidence: number | null;
+  changeType: "added" | "removed" | "changed" | "unchanged";
+  baselineLabel: string | null;
+  comparisonLabel: string | null;
+  baselineZone: string | null;
+  comparisonZone: string | null;
+  baselineLocation: string | null;
+  comparisonLocation: string | null;
+  baselineConfidence: number | null;
+  comparisonConfidence: number | null;
+}
+
+export interface WalkthroughComparison {
+  baseline: { id: string; status: string; uploadedAt: string };
+  comparison: { id: string; status: string; uploadedAt: string };
+  summary: {
+    added: number;
+    removed: number;
+    changed: number;
+    unchanged: number;
+  };
+  items: ComparisonItem[];
+}
+
+export function getWalkthroughComparison(baselineId: string, comparisonId: string) {
+  return request<WalkthroughComparison>(
+    `/api/comparison/walkthroughs?baseline=${baselineId}&comparison=${comparisonId}`,
+  );
+}

@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { getItem, type InventoryItem, type LocationHistoryEntry, type RepairIssue, getSpaceId } from "../api";
 import { Badge } from "../components/ui/Badge";
 import { EmptyState } from "../components/ui/EmptyState";
+import { ExportButton } from "../components/ExportButton";
 
 export function ItemDetail() {
   const { itemId } = useParams<{ itemId: string }>();
@@ -67,6 +68,7 @@ export function ItemDetail() {
             ID: {item.id.slice(0, 12)}...{item.category && <><span style={{ margin: "0 8px" }}>&middot;</span><span style={chip}>{item.category}</span></>}
           </p>
         </div>
+        <ExportButton type="inventory" />
       </div>
 
       {/* Info Grid */}

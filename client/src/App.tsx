@@ -22,6 +22,7 @@ import { Analytics } from "./pages/Analytics";
 import { Team } from "./pages/Team";
 import { Share } from "./pages/Share";
 import { Welcome } from "./pages/Welcome";
+import { DeltaComparison } from "./pages/DeltaComparison";
 
 function OnboardingGate({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -97,6 +98,7 @@ export function App() {
               <Route path="/results/:walkthroughId/items/:itemId" element={<ItemDetailEdit />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/team" element={<Team />} />
+              <Route path="/compare" element={<DeltaComparison />} />
               <Route path="/share/:token" element={<Share />} />
             </Routes>
           </OnboardingGate>

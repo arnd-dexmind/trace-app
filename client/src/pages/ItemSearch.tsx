@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { searchItems, type InventoryItem, type ItemSearchParams, getSpaceId } from "../api";
 import { EmptyState } from "../components/ui/EmptyState";
+import { ExportButton } from "../components/ExportButton";
 
 const SORT_OPTIONS: { value: ItemSearchParams["sort"]; label: string }[] = [
   { value: "name", label: "Name" },
@@ -185,6 +186,7 @@ export function ItemSearch() {
       {/* Sort & Filter Toolbar */}
       <div style={toolbarStyle}>
         <div style={toolbarLeft}>
+          <ExportButton type="inventory" style={{ marginRight: "var(--sm-space-2)" }} />
           {/* Sort */}
           <label style={controlLabel}>
             <span style={labelText}>Sort</span>
