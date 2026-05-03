@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { db } from "../lib/db.js";
 import { sendApiError } from "../lib/errors.js";
 import { createAuthMiddleware } from "../lib/auth.js";
-import { sendEmail, notificationTemplate, getUserEmail } from "../email/send.js";
 
 export const sharingRouter = Router();
 

@@ -1,3 +1,4 @@
+/* eslint-env node */
 import { chromium } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { writeFileSync, mkdirSync } from "fs";

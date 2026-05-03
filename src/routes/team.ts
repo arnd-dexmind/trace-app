@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../lib/db.js";
 import { sendApiError } from "../lib/errors.js";
 import { createAuthMiddleware } from "../lib/auth.js";
-import { sendEmail, invitationTemplate, getUserEmail } from "../email/send.js";
+import { sendEmail, invitationTemplate } from "../email/send.js";
 
 export const teamRouter = Router();
 

@@ -79,8 +79,6 @@ async function getProcessingStats(
   // Aggregate summary stats from the daily rows
   let total = 0;
   let completed = 0;
-  let totalMs = 0;
-  let msCount = 0;
 
   const byDay = rows.map((r) => {
     const count = Number(r.count);

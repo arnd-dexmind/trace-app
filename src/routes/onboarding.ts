@@ -159,7 +159,7 @@ onboardingRouter.post("/seed", async (_req: Request, res: Response) => {
     update: {},
   });
 
-  const livingRoom = await db.spaceZone.upsert({
+  const _livingRoom = await db.spaceZone.upsert({
     where: { id: `demo-living-${demoSpace.id}` },
     create: { id: `demo-living-${demoSpace.id}`, spaceId: demoSpace.id, tenantId, name: "Living Room", description: "Main living area" },
     update: {},
