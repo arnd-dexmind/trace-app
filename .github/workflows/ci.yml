@@ -182,6 +182,14 @@ jobs:
         # No --prod: deploys as Preview, auto-aliased to staging.app.perifeye.com
         # (Vercel domain bound to gitBranch=staging in the trace-app project).
         run: |
+          curl -fsSL -X PATCH \
+            "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}?teamId=${VERCEL_ORG_ID}" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"installCommand":"npm install"}' \
+            > /dev/null
+          echo "Vercel project updated to use npm install"
+
           mkdir -p apps/app
           for item in * .[!.]*; do
             case "$item" in .|..|apps|.git|node_modules) continue ;; esac
@@ -231,6 +239,14 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
+          curl -fsSL -X PATCH \
+            "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}?teamId=${VERCEL_ORG_ID}" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"installCommand":"npm install"}' \
+            > /dev/null
+          echo "Vercel project updated to use npm install"
+
           mkdir -p apps/app
           for item in * .[!.]*; do
             case "$item" in .|..|apps|.git|node_modules) continue ;; esac
