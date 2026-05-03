@@ -182,8 +182,12 @@ jobs:
         # No --prod: deploys as Preview, auto-aliased to staging.app.perifeye.com
         # (Vercel domain bound to gitBranch=staging in the trace-app project).
         run: |
-          mkdir -p apps
-          ln -sf .. apps/app
+          mkdir -p apps/app
+          for item in * .[!.]*; do
+            case "$item" in .|..|apps|.git|node_modules) continue ;; esac
+            [ -e "$item" ] || continue
+            cp -al "$item" apps/app/
+          done
           npx vercel@latest deploy --token "$VERCEL_TOKEN" --yes
 
       - name: Smoke test
@@ -227,8 +231,12 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          mkdir -p apps
-          ln -sf .. apps/app
+          mkdir -p apps/app
+          for item in * .[!.]*; do
+            case "$item" in .|..|apps|.git|node_modules) continue ;; esac
+            [ -e "$item" ] || continue
+            cp -al "$item" apps/app/
+          done
           npx vercel@latest deploy --prod --token "$VERCEL_TOKEN" --yes
 
       - name: Smoke test
