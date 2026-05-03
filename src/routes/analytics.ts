@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "../lib/db.js";
 import { sendApiError } from "../lib/errors.js";
 import { createAuthMiddleware } from "../lib/auth.js";
-import { getAnalytics } from "../lib/analytics.js";
+import { getAnalytics, getSpaceOverview } from "../lib/analytics.js";
 
 export const analyticsRouter = Router();
 
@@ -23,5 +23,26 @@ analyticsRouter.get("/", async (req, res) => {
       detail: err instanceof Error ? err.message : String(err),
     }));
     sendApiError(res, 500, "INTERNAL_ERROR", "Failed to load analytics");
+  }
+});
+
+analyticsRouter.get("/overview", async (req, res) => {
+  const spaceId = typeof req.query.spaceId === "string" ? req.query.spaceId : null;
+  if (!spaceId) {
+    sendApiError(res, 400, "BAD_REQUEST", "spaceId query parameter is required");
+    return;
+  }
+
+  try {
+    const overview = await getSpaceOverview(db, res.locals.tenantId, spaceId);
+    res.status(200).json(overview);
+  } catch (err) {
+    console.error(JSON.stringify({
+      level: "error",
+      requestId: res.locals.requestId,
+      message: "Analytics overview query failed",
+      detail: err instanceof Error ? err.message : String(err),
+    }));
+    sendApiError(res, 500, "INTERNAL_ERROR", "Failed to load analytics overview");
   }
 });

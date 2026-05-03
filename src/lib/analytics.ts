@@ -34,6 +34,13 @@ export interface AnalyticsSnapshot {
   inventory: InventoryBreakdown;
 }
 
+export interface SpaceOverview {
+  totalItems: number;
+  totalRepairs: number;
+  totalZones: number;
+  totalWalkthroughs: number;
+}
+
 export async function getAnalytics(
   db: PrismaClient,
   params: AnalyticsParams,
@@ -270,4 +277,19 @@ async function getInventoryBreakdown(
     categories: catRows.map((r) => ({ category: r.category, count: Number(r.count) })),
     itemsPerSpace: spaceRows.map((r) => ({ spaceName: r.name, count: Number(r.count) })),
   };
+}
+
+export async function getSpaceOverview(
+  db: PrismaClient,
+  tenantId: string,
+  spaceId: string,
+): Promise<SpaceOverview> {
+  const [totalItems, totalRepairs, totalZones, totalWalkthroughs] = await Promise.all([
+    db.inventoryItem.count({ where: { tenantId, spaceId } }),
+    db.repairIssue.count({ where: { tenantId, spaceId } }),
+    db.spaceZone.count({ where: { tenantId, spaceId } }),
+    db.walkthrough.count({ where: { tenantId, spaceId } }),
+  ]);
+
+  return { totalItems, totalRepairs, totalZones, totalWalkthroughs };
 }
