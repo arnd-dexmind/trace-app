@@ -18,9 +18,9 @@ const ROUTES = [
   { path: "/capture", name: "Capture" },
 ];
 
-type ViewportName = keyof typeof VIEWPORTS;
+type _ViewportName = keyof typeof VIEWPORTS;
 
-function touchTargetViolations(page: any) {
+function _touchTargetViolations(_page: any) {
   // This is checked at code-review level; runtime detection is unreliable.
   // We document touch-target issues from source analysis.
 }

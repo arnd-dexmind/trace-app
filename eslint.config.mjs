@@ -34,6 +34,15 @@ export default [
     }
   },
   {
+    files: ["**/*.mjs"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...globals.browser
+      }
+    }
+  },
+  {
     ignores: ["dist/**", "client/dist/**", "client/client/**", "brand/**", "node_modules/**"]
   }
 ];

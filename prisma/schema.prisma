@@ -65,6 +65,7 @@ model Walkthrough {
   id                 String              @id @default(cuid())
   spaceId            String
   tenantId           String
+  name               String?
   status             String              @default("uploaded")
   metadata           String?
   uploadedAt         DateTime            @default(now())

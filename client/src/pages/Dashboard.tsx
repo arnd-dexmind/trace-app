@@ -1,14 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  searchItems,
-  listRepairs,
-  listWalkthroughs,
-  type InventoryItem,
-  type RepairIssue,
-  type Walkthrough,
-  getSpaceId,
-} from "../api";
+import { getDashboardStats, getSpaceId, type DashboardStats } from "../api";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -20,11 +12,18 @@ const WALKTHROUGH_STATUS: Record<string, { label: string; variant: "status-open"
   applied: { label: "Applied", variant: "status-resolved" },
 };
 
+const ACTIVITY_ICONS: Record<string, string> = {
+  walkthrough_created: "&#128249;",
+  repair_opened: "&#128295;",
+  repair_resolved: "&#9989;",
+  item_added: "&#128230;",
+  review_completed: "&#9989;",
+  export_generated: "&#128196;",
+};
+
 export function Dashboard() {
   const spaceId = getSpaceId();
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [repairs, setRepairs] = useState<RepairIssue[]>([]);
-  const [walkthroughs, setWalkthroughs] = useState<Walkthrough[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,16 +34,8 @@ export function Dashboard() {
     }
     setLoading(true);
     setError(null);
-    Promise.all([
-      searchItems(spaceId),
-      listRepairs(spaceId),
-      listWalkthroughs(spaceId),
-    ])
-      .then(([itemsRes, repairsRes, walkthroughsRes]) => {
-        setItems(itemsRes);
-        setRepairs(repairsRes);
-        setWalkthroughs(walkthroughsRes);
-      })
+    getDashboardStats(spaceId)
+      .then(setStats)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load dashboard data"))
       .finally(() => setLoading(false));
   }, [spaceId]);
@@ -61,15 +52,7 @@ export function Dashboard() {
     );
   }
 
-  const openRepairs = repairs.filter((r) => r.status !== "resolved").length;
-  const recentWalkthroughs = walkthroughs.slice(0, 5);
-  const hasData = items.length > 0 || repairs.length > 0 || walkthroughs.length > 0;
-
-  const summaryCards = [
-    { label: "Inventory Items", value: items.length, href: "/items", icon: "&#128230;" },
-    { label: "Open Repairs", value: openRepairs, href: "/repairs", icon: "&#128295;" },
-    { label: "Walkthroughs", value: walkthroughs.length, href: "/upload", icon: "&#128249;" },
-  ];
+  const hasData = stats && (stats.itemCount > 0 || stats.repairCount > 0 || stats.walkthroughCount > 0);
 
   return (
     <div style={shell}>
@@ -88,7 +71,7 @@ export function Dashboard() {
       <div style={hero}>
         <h1 style={{ fontSize: "var(--sm-text-2xl)", fontWeight: 700, margin: 0 }}>Dashboard</h1>
         <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)", margin: 0 }}>
-          At-a-glance view of your space
+          {stats?.space.name ? `${stats.space.name} · ` : ""}At-a-glance view of your space
         </p>
       </div>
 
@@ -96,72 +79,158 @@ export function Dashboard() {
         <div style={{ textAlign: "center", padding: "var(--sm-space-16) 0", color: "var(--sm-text-tertiary)" }}>
           Loading dashboard...
         </div>
-      ) : hasData ? (
+      ) : hasData || (stats && stats.walkthroughCount > 0) ? (
         <>
           {/* Summary Cards */}
           <div style={cardGrid}>
-            {summaryCards.map((card) => (
-              <Link key={card.label} to={card.href} style={summaryCard}>
-                <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden="true" dangerouslySetInnerHTML={{ __html: card.icon }} />
-                <span style={{ fontSize: "var(--sm-text-2xl)", fontWeight: 700, color: "var(--sm-text-primary)" }}>
-                  {card.value}
-                </span>
-                <span style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)" }}>{card.label}</span>
-              </Link>
-            ))}
+            <Link to="/items" style={summaryCard}>
+              <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden="true">&#128230;</span>
+              <span style={{ fontSize: "var(--sm-text-2xl)", fontWeight: 700, color: "var(--sm-text-primary)" }}>
+                {stats?.itemCount ?? 0}
+              </span>
+              <span style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)" }}>Inventory Items</span>
+            </Link>
+            <Link to="/repairs" style={summaryCard}>
+              <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden="true">&#128295;</span>
+              <span style={{ fontSize: "var(--sm-text-2xl)", fontWeight: 700, color: "var(--sm-text-primary)" }}>
+                {stats?.openRepairCount ?? 0}
+              </span>
+              <span style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)" }}>Open Repairs</span>
+            </Link>
+            <Link to="/upload" style={summaryCard}>
+              <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden="true">&#128249;</span>
+              <span style={{ fontSize: "var(--sm-text-2xl)", fontWeight: 700, color: "var(--sm-text-primary)" }}>
+                {stats?.walkthroughCount ?? 0}
+              </span>
+              <span style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)" }}>Walkthroughs</span>
+            </Link>
+            <Link to="/review" style={summaryCard}>
+              <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden="true">&#128203;</span>
+              <span style={{ fontSize: "var(--sm-text-2xl)", fontWeight: 700, color: "var(--sm-text-primary)" }}>
+                {stats?.pendingReviewCount ?? 0}
+              </span>
+              <span style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-secondary)" }}>Pending Review</span>
+            </Link>
           </div>
 
-          {/* Recent Walkthroughs */}
-          <section style={{ marginTop: "var(--sm-space-8)" }}>
-            <div style={sectionHeader}>
-              <h2 style={{ fontSize: "var(--sm-text-lg)", fontWeight: 600, margin: 0 }}>Recent Walkthroughs</h2>
-              <Link to="/upload" style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-link)", textDecoration: "none" }}>
-                View all
-              </Link>
+          {/* Pipeline Stats */}
+          {stats && (stats.pipeline.inProgress > 0 || stats.pipeline.queued > 0 || stats.pipeline.failed > 0) && (
+            <section style={{ marginTop: "var(--sm-space-8)" }}>
+              <h2 style={{ fontSize: "var(--sm-text-lg)", fontWeight: 600, margin: 0, marginBottom: "var(--sm-space-4)" }}>
+                Processing Pipeline
+              </h2>
+              <div style={pipelineGrid}>
+                <div style={pipelineCard}>
+                  <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)", marginBottom: "var(--sm-space-1)" }}>
+                    Queued
+                  </span>
+                  <span style={{ fontSize: "var(--sm-text-xl)", fontWeight: 700 }}>{stats.pipeline.queued}</span>
+                </div>
+                <div style={{ ...pipelineCard, borderLeft: "3px solid var(--sm-brand-500)" }}>
+                  <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)", marginBottom: "var(--sm-space-1)" }}>
+                    In Progress
+                  </span>
+                  <span style={{ fontSize: "var(--sm-text-xl)", fontWeight: 700, color: "var(--sm-brand-600)" }}>{stats.pipeline.inProgress}</span>
+                </div>
+                <div style={{ ...pipelineCard, borderLeft: "3px solid var(--sm-danger-500)" }}>
+                  <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-secondary)", marginBottom: "var(--sm-space-1)" }}>
+                    Failed
+                  </span>
+                  <span style={{ fontSize: "var(--sm-text-xl)", fontWeight: 700, color: "var(--sm-danger-600)" }}>{stats.pipeline.failed}</span>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Two-column: Walkthroughs + Activity */}
+          <div style={dashboardGrid}>
+            {/* Recent Walkthroughs */}
+            <div>
+              <div style={sectionHeader}>
+                <h2 style={{ fontSize: "var(--sm-text-lg)", fontWeight: 600, margin: 0 }}>Recent Walkthroughs</h2>
+                <Link to="/upload" style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-link)", textDecoration: "none" }}>
+                  View all
+                </Link>
+              </div>
+
+              {(!stats?.recentWalkthroughs || stats.recentWalkthroughs.length === 0) ? (
+                <div style={emptySlot}>
+                  <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-tertiary)", margin: 0 }}>
+                    No walkthroughs yet. Upload your first walkthrough to get started.
+                  </p>
+                </div>
+              ) : (
+                <div style={walkthroughList}>
+                  {stats.recentWalkthroughs.map((w) => {
+                    const ws = WALKTHROUGH_STATUS[w.status] || { label: w.status, variant: "neutral" as const };
+                    return (
+                      <div key={w.id} style={walkthroughRow}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: "var(--sm-text-sm)", fontWeight: 500, marginBottom: 2 }}>
+                            Walkthrough {w.id.slice(0, 8)}
+                          </div>
+                          <div style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)" }}>
+                            {new Date(w.uploadedAt).toLocaleDateString()} &middot;{" "}
+                            {w.metadata && typeof w.metadata === "object" && "fileCount" in w.metadata
+                              ? `${(w.metadata as Record<string, unknown>).fileCount} files`
+                              : ""}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: "var(--sm-space-2)", alignItems: "center", flexShrink: 0 }}>
+                          {w.itemObsCount != null && w.itemObsCount > 0 && (
+                            <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)" }}>
+                              {w.itemObsCount} items
+                            </span>
+                          )}
+                          {w.repairObsCount != null && w.repairObsCount > 0 && (
+                            <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)" }}>
+                              {w.repairObsCount} repairs
+                            </span>
+                          )}
+                          <Badge variant={ws.variant} dot>{ws.label}</Badge>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {recentWalkthroughs.length === 0 ? (
-              <div style={emptySlot}>
-                <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-tertiary)", margin: 0 }}>
-                  No walkthroughs yet. Upload your first walkthrough to get started.
-                </p>
-              </div>
-            ) : (
-              <div style={walkthroughList}>
-                {recentWalkthroughs.map((w) => {
-                  const ws = WALKTHROUGH_STATUS[w.status] || { label: w.status, variant: "neutral" as const };
-                  return (
-                    <div key={w.id} style={walkthroughRow}>
+            {/* Activity Feed */}
+            <div>
+              <h2 style={{ fontSize: "var(--sm-text-lg)", fontWeight: 600, margin: 0, marginBottom: "var(--sm-space-4)" }}>
+                Recent Activity
+              </h2>
+
+              {(!stats?.activityFeed || stats.activityFeed.length === 0) ? (
+                <div style={emptySlot}>
+                  <p style={{ fontSize: "var(--sm-text-sm)", color: "var(--sm-text-tertiary)", margin: 0 }}>
+                    No recent activity.
+                  </p>
+                </div>
+              ) : (
+                <div style={activityList}>
+                  {stats.activityFeed.map((event) => (
+                    <div key={event.id} style={activityRow}>
+                      <span
+                        style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}
+                        dangerouslySetInnerHTML={{ __html: ACTIVITY_ICONS[event.type] || "&#128172;" }}
+                      />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: "var(--sm-text-sm)", fontWeight: 500, marginBottom: 2 }}>
-                          Walkthrough {w.id.slice(0, 8)}
-                        </div>
+                        <div style={{ fontSize: "var(--sm-text-sm)", fontWeight: 500 }}>{event.title}</div>
                         <div style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)" }}>
-                          {new Date(w.uploadedAt).toLocaleDateString()} &middot;{" "}
-                          {w.metadata && typeof w.metadata === "object" && "fileCount" in w.metadata
-                            ? `${(w.metadata as Record<string, unknown>).fileCount} files`
-                            : ""}
+                          {event.body}
                         </div>
                       </div>
-                      <div style={{ display: "flex", gap: "var(--sm-space-2)", alignItems: "center", flexShrink: 0 }}>
-                        {w.itemObsCount != null && (
-                          <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)" }}>
-                            {w.itemObsCount} items
-                          </span>
-                        )}
-                        {w.repairObsCount != null && (
-                          <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)" }}>
-                            {w.repairObsCount} repairs
-                          </span>
-                        )}
-                        <Badge variant={ws.variant} dot>{ws.label}</Badge>
-                      </div>
+                      <span style={{ fontSize: "var(--sm-text-xs)", color: "var(--sm-text-tertiary)", whiteSpace: "nowrap" }}>
+                        {formatRelativeTime(event.occurredAt)}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Quick Actions */}
           <section style={{ marginTop: "var(--sm-space-8)" }}>
@@ -231,6 +300,20 @@ export function Dashboard() {
       )}
     </div>
   );
+}
+
+function formatRelativeTime(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  const diffMs = now - then;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────
@@ -344,4 +427,42 @@ const errorBanner: React.CSSProperties = {
   justifyContent: "space-between",
   alignItems: "center",
   fontSize: "var(--sm-text-sm)",
+};
+
+const dashboardGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "2fr 1fr",
+  gap: "var(--sm-space-6)",
+  marginTop: "var(--sm-space-8)",
+};
+
+const pipelineGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: "var(--sm-space-3)",
+};
+
+const pipelineCard: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  padding: "var(--sm-space-4)",
+  background: "var(--sm-surface-card)",
+  border: "1px solid var(--sm-border-default)",
+  borderRadius: "var(--sm-radius-md)",
+};
+
+const activityList: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  border: "1px solid var(--sm-border-default)",
+  borderRadius: "var(--sm-radius-lg)",
+  overflow: "hidden",
+};
+
+const activityRow: React.CSSProperties = {
+  display: "flex",
+  gap: "var(--sm-space-3)",
+  alignItems: "flex-start",
+  padding: "var(--sm-space-3) var(--sm-space-4)",
+  borderBottom: "1px solid var(--sm-border-default)",
 };

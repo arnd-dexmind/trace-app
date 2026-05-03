@@ -22,6 +22,7 @@ import { notificationsRouter } from "./routes/notifications.js";
 import { waitlistRouter } from "./routes/waitlist.js";
 import { reportsRouter } from "./routes/reports.js";
 import { comparisonRouter } from "./routes/comparison.js";
+import { walkthroughsRouter } from "./routes/walkthroughs.js";
 import { settingsRouter } from "./routes/settings.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -177,6 +178,7 @@ export function createApp() {
   app.use("/api/waitlist", waitlistRouter);
 app.use("/api/reports", reportsRouter);
   app.use("/api/comparison", comparisonRouter);
+  app.use("/api/walkthroughs", walkthroughsRouter);
   app.use("/api/settings", settingsRouter);
 
   // Serve React SPA in production

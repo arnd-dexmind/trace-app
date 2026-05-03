@@ -9,7 +9,7 @@ export function setTenantId(id: string) {
   localStorage.setItem(TENANT_KEY, id);
 }
 
-function getSpaceId(): string | null {
+export function getSpaceId(): string | null {
   return localStorage.getItem(SPACE_KEY);
 }
 
@@ -297,6 +297,12 @@ export function processAction(
 
 // ── Inventory ─────────────────────────────────────────────────────────
 
+export interface ItemAlias {
+  id: string;
+  alias: string;
+  source: string;
+}
+
 export interface InventoryItem {
   id: string;
   spaceId: string;
@@ -310,6 +316,7 @@ export interface InventoryItem {
   locationHistory?: LocationHistoryEntry[];
   identityLinks?: IdentityLink[];
   repairIssues?: RepairIssue[];
+  aliases?: ItemAlias[];
   latestLocation?: LocationHistoryEntry | null;
 }
 
@@ -562,6 +569,31 @@ export function updateWalkthroughResultItem(
   );
 }
 
+// ── Item Walkthrough Appearances ───────────────────────────────────────────
+
+export interface WalkthroughAppearance {
+  id: string;
+  label: string;
+  confidence: number | null;
+  zoneName: string | null;
+  storageLocationName: string | null;
+  keyframeUrl: string | null;
+}
+
+export interface ItemWalkthroughGroup {
+  walkthrough: {
+    id: string;
+    status: string;
+    uploadedAt: string;
+    name: string | null;
+  };
+  appearances: WalkthroughAppearance[];
+}
+
+export function getItemWalkthroughs(spaceId: string, itemId: string) {
+  return request<ItemWalkthroughGroup[]>(`/api/spaces/${spaceId}/inventory/${itemId}/walkthroughs`);
+}
+
 // ── Onboarding ──────────────────────────────────────────────────────────
 
 export interface OnboardingStatus {
@@ -696,7 +728,39 @@ export function updateProfile(data: { name?: string }) {
   });
 }
 
-export { getTenantId, getSpaceId };
+export { getTenantId };
+
+// ── Dashboard ────────────────────────────────────────────────────────────
+
+export interface DashboardActivityEvent {
+  id: string;
+  type: "walkthrough_created" | "repair_opened" | "repair_resolved" | "item_added" | "review_completed" | "export_generated";
+  title: string;
+  body: string;
+  occurredAt: string;
+  entityId: string;
+}
+
+export interface DashboardStats {
+  itemCount: number;
+  repairCount: number;
+  openRepairCount: number;
+  walkthroughCount: number;
+  activeWalkthroughCount: number;
+  pendingReviewCount: number;
+  pipeline: {
+    inProgress: number;
+    queued: number;
+    failed: number;
+  };
+  activityFeed: DashboardActivityEvent[];
+  recentWalkthroughs: Walkthrough[];
+  space: { id: string; name: string; description: string | null };
+}
+
+export function getDashboardStats(spaceId: string) {
+  return request<DashboardStats>(`/api/spaces/${spaceId}/dashboard`);
+}
 
 // ── Reports / Export ────────────────────────────────────────────────────
 
@@ -779,6 +843,17 @@ export interface BulkMoveResult {
   moved: number;
   zoneId: string;
   zoneName: string;
+}
+
+export interface SpaceZone {
+  id: string;
+  name: string;
+  description?: string | null;
+  spaceId: string;
+}
+
+export function listZones(spaceId: string) {
+  return request<SpaceZone[]>(`/api/spaces/${spaceId}/zones`);
 }
 
 export function bulkMoveItems(spaceId: string, body: { itemIds: string[]; zoneId: string }) {

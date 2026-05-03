@@ -2102,7 +2102,7 @@ export async function bulkMoveItems(
       itemId,
       tenantId,
       zoneId,
-      movedAt: new Date(),
+      observedAt: new Date(),
     })),
   });
 
